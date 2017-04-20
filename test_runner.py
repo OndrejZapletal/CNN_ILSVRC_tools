@@ -20,6 +20,7 @@ import time
 def load_model():
     pass
 
+
 def check_for_new_models(list_of_models):
     list_of_files = glob.glob('../models/model*.txt')
     new_models = []
@@ -31,6 +32,7 @@ def check_for_new_models(list_of_models):
 def update_solved_models_count():
     pass
 
+
 def main_loop():
     list_of_models = []
     while True:
@@ -39,6 +41,7 @@ def main_loop():
             list_of_models += new_modules
             print("Found a new model.")
         wait_time_interval(10)
+
 
 def wait_time_interval(interval):
     time.sleep(interval)
