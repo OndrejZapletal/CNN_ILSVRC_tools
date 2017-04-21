@@ -19,31 +19,33 @@ import time
 
 
 def load_model(source_name):
-    """TODO:"""
+    """TODO: Make sure that you are getting correct information from both configuration and parameter files."""
 
     model = get_model_parameters(source_name), get_model_configuration(source_name)
     return model
 
 
 def check_for_new_models(list_of_models):
+    """TODO: retrun value of each model_name should contain only unique part of the name.
+    i.e timestamp and itteration.
+    """
     list_of_files = glob.glob('../models/model*.txt')
     new_models = []
-    for model in list_of_files:
-        if model not in list_of_models:
-            new_models.append(model)
+    for model_name in list_of_files:
+        if model_name not in list_of_models:
+            new_models.append(model_name)
     return new_models
 
 
 def get_model_configuration(source):
+    """TODO: This function will read vales from JSON to configure model.
+    """
     return source
 
 
 def get_model_parameters(source):
+    """TODO: This function will read vales from text file to set model paramters."""
     return source
-
-
-def update_solved_models_count():
-    pass
 
 
 def load_dataset():
@@ -54,6 +56,9 @@ def load_dataset():
 
 
 def main_loop():
+    """Main program loop.
+    TODO: So far it look promising but it needs to be checked in order to determine if it does what it should.
+    """
     trained_models = []
     dataset = load_dataset()
     optimizers = ['adam', 'nadam']
@@ -66,7 +71,7 @@ def main_loop():
                 try:
                     model_sucessfully_tested = test_model(model_descrition, optimizers, dataset)
                 except:
-                    # General exception, TODO: find better option
+                    # General exception, TODO: find better exception
                     print("Model %s"% model_descrition)
 
                 if model_sucessfully_tested:
