@@ -36,7 +36,7 @@ def create_logger():
     formatter = logging.Formatter('%(asctime)s - %(lineno)d - %(name)s - %(levelname)s - %(message)s')
 
     # file handler
-    handler_dbg = logging.FileHandler('application_debug.log')
+    handler_dbg = logging.FileHandler('../logs/application_debug.log')
     handler_dbg.setLevel(logging.DEBUG)
     handler_dbg.setFormatter(formatter)
 
@@ -168,9 +168,18 @@ def main_loop():
 
                 if model_sucessfully_tested:
                     trained_models.append(model_name)
-                    LOGGER_APP.info("Succesfully tested model: %s", str(model_name))
+                    LOGGER_APP.info("Successfully tested model: %s", str(model_name))
+                    move_model_source(model_name)
+
         wait_time_interval(10)
 
+def move_model_source(model_name):
+    os.rename("../models/model_%s_parameters.json" % model_name,
+              "../trained_models/model_%s_parameters.json" % model_name)
+    try:
+        os.remove("../models/model_%s_configuration.json" % model_name)
+    except OSError:
+        LOGGER_APP.debug("Problem with removing of source for models configuration.")
 
 
 def wait_time_interval(interval):
