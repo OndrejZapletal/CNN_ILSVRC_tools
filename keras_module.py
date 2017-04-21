@@ -1,6 +1,5 @@
 import sys
 
-import matplotlib.pyplot as plt
 import numpy as np
 from keras.datasets import cifar10
 from keras.layers import (Activation, Conv2D, Dense, Dropout, Flatten,
@@ -14,7 +13,7 @@ def test_model(model, optimizers, dataset):
 
     loaded_model = load_model_from_file(model)
 
-    find_performance_of_model(loaded_model, optimizers, data)
+    find_performance_of_model(loaded_model, optimizers, dataset)
 
 def find_performance_of_model(models, optimizers, data):
     """ Function will test results of different optimizers.
@@ -25,28 +24,12 @@ def find_performance_of_model(models, optimizers, data):
             trained_model = train_model(model(), data[0], optimizer)
             save_model_to_file(trained_model, '%s_%s' % (i, optimizer))
             evaluate_net(trained_model, data[1])
-            print("Layer 0:")
-            print(trained_model.layers[0].input_shape)
-            print(trained_model.layers[0].output_shape)
-            print(trained_model.layers[0].weights)
-
-            print("Layer 1:")
-            print(trained_model.layers[1].input_shape)
-            print(trained_model.layers[1].output_shape)
-            print(trained_model.layers[1].weights)
-
-            print("Layer 2:")
-            print(trained_model.layers[2].input_shape)
-            print(trained_model.layers[2].output_shape)
-            print(trained_model.layers[2].weights)
 
 def load_model_from_file(model):
     """Save model to json and weigths to h5py."""
     try:
-        with open("model_%s_architecture.json" % name, 'w') as json_file:
+        with open("%s.json" % model[0], 'r') as json_file:
             json_file.write(model.to_json())
-        model.save_weights("model_%s_weights.h5" % name)
-        print("model_%s saved" % name)
         return True
     except:
         print(sys.exc_info())
@@ -86,9 +69,6 @@ def evaluate_net(model, test_data):
     print("Correctly guessed: %s" % len(correct_indexes))
     print("Incorrectly guessed: %s" % len(incorrect_indexes))
 
-    if plot:
-        plot_mistakes(incorrect_indexes, test_data, predicted_classes_indexes,
-                      test_data_indexes)
     return score
 
 def train_model(model, train_data, optimizer):
