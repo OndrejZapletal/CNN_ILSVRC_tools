@@ -17,8 +17,12 @@ import time
 
 # from keras_module import test_model
 
-def load_model():
-    pass
+
+def load_model(source_name):
+    """TODO:"""
+
+    model = get_model_parameters(source_name), get_model_configuration(source_name)
+    return model
 
 
 def check_for_new_models(list_of_models):
@@ -29,22 +33,56 @@ def check_for_new_models(list_of_models):
             new_models.append(model)
     return new_models
 
+
+def get_model_configuration(source):
+    return source
+
+
+def get_model_parameters(source):
+    return source
+
+
 def update_solved_models_count():
     pass
 
 
+def load_dataset():
+    """TODO:
+    Think how to make this as independet from the rest of the script as possible."""
+
+    return 1
+
+
 def main_loop():
-    list_of_models = []
+    trained_models = []
+    dataset = load_dataset()
+    optimizers = ['adam', 'nadam']
     while True:
-        new_modules = check_for_new_models(list_of_models)
-        if new_modules:
-            list_of_models += new_modules
-            print("Found a new model.")
+        new_models = check_for_new_models(trained_models)
+        if new_models:
+            for model_name in new_models:
+                model_descrition = load_model(model_name)
+                model_sucessfully_tested = False
+                try:
+                    model_sucessfully_tested = test_model(model_descrition, optimizers, dataset)
+                except:
+                    # General exception, TODO: find better option
+                    print("Model %s"% model_descrition)
+
+                if model_sucessfully_tested:
+                    trained_models.append(model_name)
+                    print("Found model: %s" % model_name)
         wait_time_interval(10)
+
+
+def test_model(model_descrition, optimizers, dataset):
+    """TEST FUNCTION"""
+    return True
 
 
 def wait_time_interval(interval):
     time.sleep(interval)
+
 
 if __name__ == '__main__':
     main_loop()
