@@ -15,8 +15,11 @@ import glob
 import json
 import logging
 import os
+import sys
 import re
 import time
+
+from datetime import datetime
 
 from keras.datasets import cifar10
 from keras.models import model_from_json
@@ -72,6 +75,7 @@ def check_for_new_models(list_of_models):
             new_models.append(model_name)
     return new_models
 
+
 def parse_model_name(file_name):
     """Parser is extracting part of the name betwen words 'model_' and '_parameters.json'."""
     file_parser = re.compile(r"\.\./models/model_(.*)_parameters\.json")
@@ -79,7 +83,6 @@ def parse_model_name(file_name):
     LOGGER_APP.debug(result)
     if not result:
         LOGGER_APP.error("Name of model wasn't parsed.")
-
         Exception("Name of model wasn't parsed.")
     # TODO
     return result
@@ -125,53 +128,64 @@ def load_optimizers():
         LOGGER_APP.debug('loading optimizers from file: %s', optimizers)
     return optimizers
 
+def create_temp(model_data, optimizers):
+    """Create temp file with basic model settings."""
+    with open(TEMP_FILE, 'w') as temp_file:
+        temp_file.write("%s\n" % datetime.utcnow())
+        temp_file.write("%s\n" % str(model_data[1]['name']))
+        temp_file.write("%s\n" % str(optimizers))
+        temp_file.write("%s\n" % str(model_data[1]['batch_size']))
+        temp_file.write("%s\n" % str(model_data[1]['epochs']))
+        temp_file.write("%s" % str(model_data[1]['verbose']))
+
+
+def remove_temp():
+    """Remove temp file after training of model is finished."""
+    try:
+        os.remove(TEMP_FILE)
+    except OSError:
+        LOGGER_APP.debug("This might be a problem since this shuldn't happen!")
+
 
 def main_loop():
-    """Main program loop.
-    TODO: So far it look promising but it needs to be checked in order to determine if it does what it should.
-    """
+    """Main program loop."""
     trained_models = []
     dataset = load_dataset()
     while True:
-        optimizers = load_optimizers()
-        new_models = check_for_new_models(trained_models)
-        if new_models:
-            for model_name in new_models:
-                model_sucessfully_tested = False
+        try:
+            optimizers = load_optimizers()
+            new_models = check_for_new_models(trained_models)
+            if new_models:
+                for model_name in new_models:
+                    model_sucessfully_tested = False
 
-                LOGGER_APP.info("Found model: %s", str(model_name))
-                try:
-
-                    model_data = load_model_data(model_name)
-
+                    LOGGER_APP.info("Found model: %s", str(model_name))
                     try:
-                        with open(TEMP_FILE, 'w') as temp_file:
-                            temp_file.write("%s\n" % time.time())
-                            temp_file.write("%s\n" % str(model_data[1]['name']))
-                            temp_file.write("%s" % str(optimizers))
 
-                        model_sucessfully_tested = test_model(model_data, optimizers, dataset)
+                        model_data = load_model_data(model_name)
 
                         try:
-                            os.remove(TEMP_FILE)
-                        except OSError:
-                            LOGGER_APP.debug("This might be a problem since this shuldn't happen!")
-                    except:
-                        # General exception, TODO: find better exception
-                        LOGGER_APP.info("Model: %s", str(model_data[1]['name']))
-                        try:
-                            os.remove(TEMP_FILE)
-                        except OSError:
-                            LOGGER_APP.debug("Temp file not present while handeling exception.")
-                except FileNotFoundError:
-                    LOGGER_APP.info("Configuration file is missing!")
+                            create_temp(model_data, optimizers)
+                            model_sucessfully_tested = test_model(model_data, optimizers, dataset)
+                            remove_temp()
 
-                if model_sucessfully_tested:
-                    trained_models.append(model_name)
-                    LOGGER_APP.info("Successfully tested model: %s", str(model_name))
-                    move_model_source(model_name)
+                        except Exception as general_exception:
+                            # General exception, TODO: find better exception
+                            LOGGER_APP.info(general_exception, sys.exc_info())
+                            remove_temp()
 
-        wait_time_interval(10)
+                    except FileNotFoundError:
+                        LOGGER_APP.info("Configuration file is missing!")
+
+                    if model_sucessfully_tested:
+                        trained_models.append(model_name)
+                        LOGGER_APP.info("Successfully tested model: %s", str(model_name))
+                        move_model_source(model_name)
+            else:
+                wait_time_interval(1)
+
+        except Exception as general_exception:
+            LOGGER_APP.error(general_exception, sys.exc_info())
 
 def move_model_source(model_name):
     os.rename("../models/model_%s_parameters.json" % model_name,
