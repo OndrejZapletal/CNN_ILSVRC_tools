@@ -6,7 +6,6 @@ import json
 import logging
 import re
 
-
 LAYER_TYPE = ["Conv2D", "MaxPooling2D", "Dense"]
 MODEL_PATH = "../trained_models/"
 REGEX_MODEL_PATH = MODEL_PATH.replace(".", r"\.")
@@ -70,7 +69,7 @@ def get_model_json(source):
         return json.loads(model_json)
 
 
-def get_model_configuration_from_json(source):
+def get_model_configuration(source):
     """TODO: This function will read vales from JSON to configure model. """
     with open(MODEL_PATH + "model_%s_configuration.json" % source, 'r') as json_file:
         return json.loads(json_file.read())
@@ -81,7 +80,9 @@ def main_loop():
     found_models = check_for_new_models()
     for model_name in found_models:
         model_json = get_model_json(model_name)
-        table = analyze_json(model_json, model_name)
+        # configuration = get_model_configuration(model_name)
+        # table = analyze_jsons(model_json, configuration, model_name)
+        table = analyze_jsons(model_json, model_name)
         list_of_tables.append(table)
 
     with open(RESULTS_DESTINATION + "results.org", 'w') as results_file:
@@ -90,11 +91,13 @@ def main_loop():
             results_file.write("\n")
 
 
-def analyze_json(json_data, model_name):
+# def analyze_jsons(json_data, parameters, model_name):
+def analyze_jsons(json_data, model_name):
     print("Analyzing model %s" % model_name)
     layers = []
     for layer in json_data['config']:
         layers.append(analyze_layer(layer))
+    # return create_table(layers, parameters)
     return create_table(layers, model_name)
 
 
@@ -119,6 +122,7 @@ def analyze_layer(layer):
 
     return result
 
+
 def get_header(name):
     tab_name = name
     caption_name = name.replace("_", "\\textunderscore ")
@@ -134,7 +138,12 @@ def get_middle():
 def get_footer():
     return "|-|\n"
 
+# def get_params(params):
+#     return "|-|\n|batch size|epochs|-|-|-|\n|-|"
+
+# def create_table(layers, parameters):
 def create_table(layers, model_name):
+    # table = get_header(parameters['name'])
     table = get_header(model_name)
     index = 1
     row = ""
@@ -164,6 +173,7 @@ def create_table(layers, model_name):
             previous_regularized = True
         elif layer[0] == 'Activation':
             row += '| %s ' % (layer[1])
+    # table += get_params(parameters)
     table += get_footer()
 
 
