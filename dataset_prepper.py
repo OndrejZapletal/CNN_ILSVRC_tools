@@ -11,109 +11,125 @@ from scipy.ndimage import imread
 
 from loggers import LOGGER_DATASET
 
-SOURCE = "/home/ondrej-zapletal/projects/ILSVRC/source_dataset/"
-DESTINATION = "/home/ondrej-zapletal/projects/ILSVRC/destination_dataset/"
+SOURCE = os.path.expanduser("~/projects/ILSVRC/source_dataset/")
+DESTINATION = os.path.expanduser("~/projects/ILSVRC/destination_dataset/")
 
-HDF5_SRC = "../configuration/image_net_source.h5"
-HDF5_DST = "../configuration/image_net.h5"
+HDF5_SRC = "../datasets/image_net_source.h5"
+HDF5_DST = "../datasets/image_net.h5"
 
 SIZE = 256
+MAX_VAL = 255
 
-
-def load_dataset_from_h5f(h5f_name):
-    """TODO:
+def prepare_dataset_from_hf5(hf5_file_name):
+    """TODO: Update
     Think how to make this as independet from the rest of the script as possible.
     Load data from CIFAR10 database."""
 
-    with h5py.File(h5f_name, 'r') as h5f:
-        nb_classes = 20
-        max_val = 255
-
-        h5f_w = h5py.File(HDF5_DST, 'w')
+    with h5py.File(hf5_file_name, 'r') as hf5, h5py.File(HDF5_DST, 'w') as hf5_w:
+        nb_classes = hf5["x_train"].attrs['nb_classes']
+        size = hf5["x_train"].attrs['batch_sizes']
+        test_batch_size = hf5["x_test"].attrs['batch_sizes']
 
         LOGGER_DATASET.info("Loading data from HDF5 file")
-        x_train = h5f["x_train"][:]
-        LOGGER_DATASET.info("Loaded x_train")
-        y_train = h5f["y_train"][:]
-        LOGGER_DATASET.info("Loaded y_train")
-        x_test = h5f["x_test"][:]
-        LOGGER_DATASET.info("Loaded x_test")
-        y_test = h5f["y_test"][:]
-        LOGGER_DATASET.info("Loaded y_test")
+        x_train_dset = hf5_w.create_dataset("x_train", hf5["x_train"].shape, dtype=np.float32, chunks=True)
+        y_train_dset = hf5_w.create_dataset("y_train", (hf5["y_train"].shape[0], nb_classes), chunks=True)
+        x_test_dset = hf5_w.create_dataset("x_test", hf5["x_test"].shape, dtype=np.float32, chunks=True)
+        y_test_dset = hf5_w.create_dataset("y_test", (hf5["y_test"].shape[0], nb_classes), chunks=True)
 
-        LOGGER_DATASET.info("Cloning datasets")
-        x_train_dset = h5f_w.create_dataset("x_train", data=x_train, chunks=True)
-        y_train_dset = h5f_w.create_dataset("y_train", data=y_train, chunks=True)
-        x_test_dset = h5f_w.create_dataset("x_test", data=x_test, chunks=True)
-        y_test_dset = h5f_w.create_dataset("y_test", data=y_test, chunks=True)
+        x_train_dset.attrs["batch_size"] = size
+        y_train_dset.attrs["nb_classes"] = nb_classes
+        x_test_dset.attrs["batch_size"] = test_batch_size
+        y_test_dset.attrs["nb_classes"] = nb_classes
+
+        LOGGER_DATASET.info("Chunkification:")
+
+        for index in range(0, hf5["x_train"].shape[0], size):
+            print("processing chunk (%s:%s)" % (index, index+size))
+            x_train_dset[index:index+size] = np.divide(hf5["x_train"][index:index+size], MAX_VAL)
+            y_train_dset[index:index+size] = np_utils.to_categorical(hf5["y_train"][index:index+size], nb_classes)
+
+        for index in range(0, hf5["x_test"].shape[0], size):
+            print("processing chunk (%s:%s)" % (index, index+size))
+            x_test_dset[index:index+size] = np.divide(hf5["x_test"][index:index+size], MAX_VAL)
+            y_test_dset[index:index+size] = np_utils.to_categorical(hf5["y_test"][index:index+size], nb_classes)
+
         LOGGER_DATASET.info("finished")
 
-        print(x_train_dset.name)
+        LOGGER_DATASET.info("dtype of dset:")
+        print(x_train_dset.dtype)
+        print(y_train_dset.dtype)
+        print(x_test_dset.dtype)
+        print(y_test_dset.dtype)
+
+        LOGGER_DATASET.info("dtype of dset:")
         print(x_train_dset.shape)
-
-        x_train_dset = x_train_dset.astype('float32')
-        x_test_dset = x_test_dset.astype('float32')
-
-        x_train_dset = x_train_dset[:] / max_val
-        x_test_dset = x_test_dset[:] / max_val
-
-        y_train_dset = np_utils.to_categorical(y_train_dset[:], nb_classes)
-        y_test_dset = np_utils.to_categorical(y_test_dset[:], nb_classes)
-
-        LOGGER_DATASET.debug("Training data X shape %s", x_train_dset.shape)
-        LOGGER_DATASET.debug("Testing data X shape %s", x_test_dset.shape)
-        LOGGER_DATASET.debug("Training data Y shape %s", y_train_dset.shape)
-        LOGGER_DATASET.debug("Testing data Y shape %s", y_test_dset.shape)
+        print(y_train_dset.shape)
+        print(x_test_dset.shape)
+        print(y_test_dset.shape)
 
         return  (x_train_dset[:], y_train_dset[:]), (x_test_dset[:], y_test_dset[:])
 
 
-def load_dataset_from_disk():
+def load_dataset_from_hf5(hf5_file_name):
+    """ TODO: update
+    Load dataset from specified hdf5 file. """
+    with h5py.File(hf5_file_name, 'r') as hf5:
+        LOGGER_DATASET.info("Loading data from HDF5 file")
+        return (hf5["x_train"][:], hf5["y_train"][:]), (hf5["x_test"][:], hf5["y_test"][:])
+
+
+def load_dataset_from_images(source, hdf5_file_name):
     """Function loads images from source directory and loads them into
     numpy ndarrys.
     """
-    dataset_x = []
-    dataset_y = []
-    class_keys = {}
+    with h5py.File(hdf5_file_name, 'w') as hf5:
+        hf5.create_group("data")
 
-    index = 0
-    for dir_path in sorted(glob.glob(os.path.join(DESTINATION, "*/"))):
-        images = []
-        classes = []
+        dataset_x = []
+        dataset_y = []
+        class_keys = {}
 
-        dir_name = os.path.split(os.path.dirname(dir_path))[1]
+        # index = 0
 
-        if not os.path.exists(DESTINATION + dir_name):
-            os.mkdir(DESTINATION + dir_name)
+        for dir_path in sorted(glob.glob(os.path.join(source, "*/"))):
+            images = []
+            classes = []
 
-        for file_path in sorted(glob.glob(dir_path + "/*.JPEG")):
+            dir_name = os.path.split(os.path.dirname(dir_path))[1]
 
-            if dir_name not in class_keys:
-                class_keys[dir_name] = index
-                index += 1
+            hf5.create_dataset("/data/%s" % dir_name, (1000, SIZE, SIZE, 3), maxshape=(None, SIZE, SIZE, 3))
 
-            try:
-                new_image = imread(file_path, mode="RGB")
-                if new_image.shape == (SIZE, SIZE, 3):
-                    images.append(new_image)
-                    classes.append(class_keys[dir_name])
-                else:
-                    LOGGER_DATASET.info("%s: %s", file_path, new_image.shape)
+            if not os.path.exists(DESTINATION + dir_name):
+                os.mkdir(DESTINATION + dir_name)
 
-            except ValueError:
-                LOGGER_DATASET.info("%s: %s", file_path, imread(file_path, mode="RGB").shape)
+            for index, file_path in enumerate(sorted(glob.glob(dir_path + "/*.JPEG"))):
 
-        dataset_x.append(images)
-        dataset_y.append(classes)
+                # if dir_name not in class_keys:
+                #     class_keys[dir_name] = index
+                #     index += 1
 
-    return split_data((dataset_x, dataset_y))
+                try:
+                    new_image = imread(file_path, mode="RGB")
+                    if new_image.shape == (SIZE, SIZE, 3):
+                        images.append(new_image)
+                        classes.append(class_keys[dir_name])
+                    else:
+                        LOGGER_DATASET.info("%s: %s", file_path, new_image.shape)
+
+                except ValueError:
+                    LOGGER_DATASET.info("%s: %s", file_path, imread(file_path, mode="RGB").shape)
+
+            dataset_x.append(images)
+            dataset_y.append(classes)
+
+        return split_data((dataset_x, dataset_y))
 
 
-def fix_data():
+def convert_data_for_datset(source, destination):
     """Function resizes all images in source folder into (SIZE, SIZE, 3)
     format and saves it to destination folder.
     """
-    for dir_path in sorted(glob.glob(os.path.join(SOURCE, "*/"))):
+    for dir_path in sorted(glob.glob(os.path.join(source, "*/"))):
 
         dir_name = os.path.split(os.path.dirname(dir_path))[1]
 
@@ -146,7 +162,7 @@ def fix_data():
             except IndexError:
                 LOGGER_DATASET.info("Problem with fix_image, %s, %s", file_path, raw_image.shape)
 
-            imsave(os.path.join(DESTINATION, dir_name, file_name), raw_image)
+            imsave(os.path.join(destination, dir_name, file_name), raw_image)
             LOGGER_DATASET.info("file  %s saved", file_name)
 
 
@@ -189,12 +205,12 @@ def split_data(data):
 
     return (x_train, y_train), (x_test, y_test)
 
-def save_data(data):
+def save_data_to_hf5(data):
     """First attempt to save data to hdf5 data format."""
 
     (x_train, y_train), (x_test, y_test) = data
 
-    with h5py.File(HDF5_DST, 'w') as hf_w:
+    with h5py.File(HDF5_SRC, 'w') as hf_w:
         hf_w.create_dataset("x_train", data=x_train)
         hf_w.create_dataset("y_train", data=y_train)
         hf_w.create_dataset("x_test", data=x_test)
@@ -266,10 +282,10 @@ def crop_y(channel):
 
 def main():
     """Main function"""
-    # fix_data()
-    # save_data()
-    (x_train, y_train), (x_test, y_test) = load_dataset_from_h5f(HDF5_SRC)
-
+    # convert_data_for_datset(SOURCE, DESTINATION)
+    # save_data_to_hf5(HDF5_SRC)
+    # (x_train, y_train), (x_test, y_test) = load_dataset_from_hf5(HDF5_DST)
+    prepare_dataset_from_hf5(HDF5_SRC)
 
 
 if __name__ == "__main__":
