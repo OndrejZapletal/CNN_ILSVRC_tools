@@ -3,7 +3,6 @@
 
 import glob
 import json
-import logging
 import os
 import re
 import sys
@@ -14,9 +13,8 @@ from keras.datasets import cifar10
 from keras.models import model_from_json
 from keras.utils import np_utils
 
-from evaluator import evaluate
 from dataset_prepper import load_dataset_from_h5f
-
+from evaluator import evaluate
 from loggers import LOGGER_APP, LOGGER_DATASET, LOGGER_EVALUATION
 
 TEMP_FILE = '#in_progress#'
@@ -117,12 +115,13 @@ def remove_temp():
 
 
 def move_model_source(model_name):
+    """ When the evaluation of the model is finished both json files are
+    moved to '../trained_models/' folder
+    """
     os.rename("../models/model_%s_parameters.json" % model_name,
               "../trained_models/model_%s_parameters.json" % model_name)
-    try:
-        os.remove("../models/model_%s_configuration.json" % model_name)
-    except OSError:
-        LOGGER_APP.debug("Problem with removing of source for models configuration.")
+    os.rename("../models/model_%s_configuration.json" % model_name,
+              "../trained_models/model_%s_configuration.json" % model_name)
 
 
 def wait_time_interval(interval):
@@ -137,30 +136,37 @@ def main_loop():
         try:
             optimizers = load_optimizers()
             new_models = check_for_new_models(trained_models)
-            if new_models:
-                print("got here")
-                for model_name in new_models:
-                    model_sucessfully_tested = False
-                    LOGGER_APP.info("Found model: %s", str(model_name))
-                    try:
-                        model_data = load_model_data(model_name)
-                        dataset = load_dataset(model_data[1])
-                        try:
-                            create_temp(model_data, optimizers)
-                            model_sucessfully_tested = evaluate(model_data, optimizers, dataset)
-                            remove_temp()
-                        except Exception as general_exception:
-                            LOGGER_APP.info(general_exception, sys.exc_info())
-                            LOGGER_APP.info("Unexpected Error: Try to delete model that is causing the problem")
-                            remove_temp()
-                    except FileNotFoundError:
-                        LOGGER_APP.info("Configuration file is missing!")
-                    if model_sucessfully_tested:
-                        trained_models.append(model_name)
-                        LOGGER_APP.info("Successfully tested model: %s", str(model_name))
-                        move_model_source(model_name)
-            else:
-                wait_time_interval(1)
+            for model_name in new_models:
+                model_sucessfully_tested = False
+                LOGGER_APP.info("Found model: %s", str(model_name))
+                try:
+                    model_data = load_model_data(model_name)
+                except FileNotFoundError:
+                    LOGGER_APP.info("Configuration file is missing!")
+                    continue
+
+                try:
+                    dataset = load_dataset(model_data[1])
+                except Exception as general_exception:
+                    LOGGER_APP.info("Problem during loading of dataset!")
+                    LOGGER_APP.info(general_exception, sys.exc_info())
+                    continue
+
+                try:
+                    create_temp(model_data, optimizers)
+                    model_sucessfully_tested = evaluate(model_data, optimizers, dataset)
+                    remove_temp()
+                except Exception as general_exception:
+                    LOGGER_APP.info("Unexpected Error during model evaluation:\n" \
+                                    "Try to delete model that is causing the problem")
+                    LOGGER_APP.info(general_exception, sys.exc_info())
+                    remove_temp()
+
+                if model_sucessfully_tested:
+                    trained_models.append(model_name)
+                    LOGGER_APP.info("Successfully tested model: %s", str(model_name))
+                    move_model_source(model_name)
+            wait_time_interval(1)
         except Exception as general_exception:
             LOGGER_APP.error(general_exception, sys.exc_info())
 
