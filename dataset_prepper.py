@@ -26,11 +26,11 @@ MAX_VAL = 255
 RESHAPE_STEP = 300
 AVR_IMAGES_PER_CLASS = 500
 TRAIN_TEST_RATION = 0.9
-TRAIN_BATCH_SIZE = 500
-TEST_BATCH_SIZE = 500
+TRAIN_BATCH_SIZE = 10
+TEST_BATCH_SIZE = 10
 BATCH_SIZE = 500
-DELIMITER = "*" * 30 + "\n"
-NUM_OF_SELECTED_CLASSES = 40
+DELIMITER = "*" * 30
+NUM_OF_SELECTED_CLASSES = 100
 
 
 def load_dataset_from_images(source, hdf5_file_name):
@@ -44,7 +44,7 @@ def load_dataset_from_images(source, hdf5_file_name):
         data_grp = hf5_w.create_group("data")
         data_grp.attrs["nb_classes"] = 0
         num_of_images = 0
-        directories = sample(sorted(glob.glob(os.path.join(source, "*/"))), 40)
+        directories = sample(sorted(glob.glob(os.path.join(source, "*/"))), NUM_OF_SELECTED_CLASSES)
 
         for index, dir_path in enumerate(directories, start=1):
 
