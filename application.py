@@ -99,10 +99,10 @@ def main_loop():
                     LOGGER_APP.info("Configuration file is missing!")
                     continue
 
-                evaluate(model_data, optimizers)
-                trained_models.append(model_name)
-                LOGGER_APP.info("Successfully tested model: %s", str(model_name))
-                move_model_source(model_name)
+                if evaluate(model_data, optimizers):
+                    trained_models.append(model_name)
+                    LOGGER_APP.info("Successfully tested model: %s", str(model_name))
+                    move_model_source(model_name)
 
         except Exception as general_exception:
             LOGGER_APP.error(general_exception)

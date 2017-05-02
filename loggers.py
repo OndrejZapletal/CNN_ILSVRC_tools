@@ -1,5 +1,6 @@
 import logging
 
+
 def create_datasets_logger():
     """Logger for dataset_prepper.py """
     # creation of logger
@@ -79,7 +80,7 @@ def create_application_logger():
     logger.setLevel(logging.DEBUG)
 
     # logging format
-    formatter = logging.Formatter('%(asctime)s -%(levelname)s - %(message)s')
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
     # file handler
     handler_dbg = logging.FileHandler('../logs/application.log')

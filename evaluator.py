@@ -21,11 +21,9 @@ def create_temp(model_data, optimizers):
     """Create temp file with basic model settings."""
     with open(TEMP_FILE, 'w') as temp_file:
         temp_file.write("%s\n" % datetime.utcnow())
-        temp_file.write("%s\n" % str(model_data[1]['name']))
         temp_file.write("%s\n" % str(optimizers))
-        temp_file.write("%s\n" % str(model_data[1]['batch_size']))
-        temp_file.write("%s\n" % str(model_data[1]['epochs']))
-        temp_file.write("%s" % str(model_data[1]['verbose']))
+        for item in model_data[1].values():
+            temp_file.write("%s\n" % str(item))
 
 
 def remove_temp():
@@ -53,6 +51,7 @@ def evaluate(model_data, optimizers):
                             "Try to delete model that is causing the problem")
             LOGGER_EVALUATION.info(general_exception)
             remove_temp()
+            return False
     return True
 
 
@@ -101,6 +100,14 @@ def fit_generator_model(model_data, optimizer):
     model_configuration = model_data[1]
     csv_logger = CSVLogger(
         '../trained_models/model_%s_%s_performance.log' % (model_configuration['name'], optimizer))
+    if model_configuration["weights"]:
+        if os.path.isfile(model_configuration["weights"]):
+            try:
+                LOGGER_EVALUATION.info("Loading weights for %s", model_configuration['name'])
+                model.load_weights(model_configuration["weights"])
+            except Exception as general_exception:
+                LOGGER_EVALUATION.info(general_exception)
+
     model.compile(
         loss=model_configuration['loss'],
         optimizer=optimizer,
