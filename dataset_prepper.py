@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 "This project will be used for preprocessing of ImageNet dataset for master thesis"
 import glob
 import os
@@ -7,7 +8,7 @@ from random import randint, sample
 import h5py
 import numpy as np
 from keras.utils import np_utils
-from scipy.misc import imresize, imsave
+from scipy.misc import imresize
 from scipy.ndimage import imread
 
 from loggers import LOGGER_DATASET
@@ -28,7 +29,7 @@ TRAIN_TEST_RATION = 0.9
 TRAIN_BATCH_SIZE = 500
 TEST_BATCH_SIZE = 500
 BATCH_SIZE = 500
-DELIMITER = "*"*30 + "\n"
+DELIMITER = "*" * 30 + "\n"
 NUM_OF_SELECTED_CLASSES = 40
 
 
@@ -67,14 +68,14 @@ def load_dataset_from_images(source, hdf5_file_name):
                 num_of_images += 1
 
                 if len(image_batch) == BATCH_SIZE:
-                    dataset[index-BATCH_SIZE:index] = np.stack(image_batch, axis=0)
+                    dataset[index - BATCH_SIZE:index] = np.stack(image_batch, axis=0)
                     image_batch = []
 
                 LOGGER_DATASET.debug("File %s saved into %s (%s of %s)",
                                      file_path, dataset.name, index_f, len(files))
 
-            if len(image_batch) > 0:
-                dataset[index-len(image_batch):index] = np.stack(image_batch, axis=0)
+            if image_batch:
+                dataset[index - len(image_batch):index] = np.stack(image_batch, axis=0)
 
             # at the end of folder resize shape to exactly fit the number of images within dataset
             if dataset.shape[0] > index:
@@ -90,9 +91,7 @@ def split_data(hf5_file_name_src, hf5_file_name_dst):
     LOGGER_DATASET.info(DELIMITER)
     LOGGER_DATASET.info("Splitting date into train and test.")
     LOGGER_DATASET.info(DELIMITER)
-    with h5py.File(hf5_file_name_src, 'r') as hf5_r, \
-         h5py.File(hf5_file_name_dst, 'w') as hf5_w:
-
+    with h5py.File(hf5_file_name_src, 'r') as hf5_r, h5py.File(hf5_file_name_dst, 'w') as hf5_w:
         data_grp = hf5_r["data"]
         split_data_grp = hf5_w.create_group("data")
         train_grp = split_data_grp.create_group("train")
@@ -144,8 +143,8 @@ def split_data(hf5_file_name_src, hf5_file_name_dst):
                 index_train += 1
 
                 if len(image_batch_train_x) == BATCH_SIZE:
-                    x_train[index_train-BATCH_SIZE:index_train] = np.stack(image_batch_train_x, axis=0)
-                    y_train[index_train-BATCH_SIZE:index_train] = np.array(image_batch_train_y).reshape(BATCH_SIZE, 1)
+                    x_train[index_train - BATCH_SIZE:index_train] = np.stack(image_batch_train_x, axis=0)
+                    y_train[index_train - BATCH_SIZE:index_train] = np.array(image_batch_train_y).reshape(BATCH_SIZE, 1)
                     image_batch_train_x = []
                     image_batch_train_y = []
 
@@ -156,21 +155,20 @@ def split_data(hf5_file_name_src, hf5_file_name_dst):
                 index_test += 1
 
                 if len(image_batch_test_x) == BATCH_SIZE:
-                    x_test[index_test-BATCH_SIZE:index_test] = np.stack(image_batch_test_x, axis=0)
-                    y_test[index_test-BATCH_SIZE:index_test] = np.array(image_batch_test_y).reshape(BATCH_SIZE, 1)
+                    x_test[index_test - BATCH_SIZE:index_test] = np.stack(image_batch_test_x, axis=0)
+                    y_test[index_test - BATCH_SIZE:index_test] = np.array(image_batch_test_y).reshape(BATCH_SIZE, 1)
                     image_batch_test_x = []
                     image_batch_test_y = []
 
-        if len(image_batch_train_x) > 0:
-            x_train[index_train-len(image_batch_train_x):index_train] = np.stack(image_batch_train_x, axis=0)
-            y_train[index_train-len(image_batch_train_y):index_train] = np.array(
+        if image_batch_train_x:
+            x_train[index_train - len(image_batch_train_x):index_train] = np.stack(image_batch_train_x, axis=0)
+            y_train[index_train - len(image_batch_train_y):index_train] = np.array(
                 image_batch_train_y).reshape(len(image_batch_train_y), 1)
 
-        if len(image_batch_test_x) > 0:
-            x_test[index_test-len(image_batch_test_x):index_test] = np.stack(image_batch_test_x, axis=0)
-            y_test[index_test-len(image_batch_test_y):index_test] = np.array(
+        if image_batch_test_x:
+            x_test[index_test - len(image_batch_test_x):index_test] = np.stack(image_batch_test_x, axis=0)
+            y_test[index_test - len(image_batch_test_y):index_test] = np.array(
                 image_batch_test_y).reshape(len(image_batch_test_y), 1)
-
 
         LOGGER_DATASET.debug("Decreasing the size of datasets to fit the data exactly.")
         if x_train.shape[0] > index_train:
@@ -203,8 +201,7 @@ def check_size(x_data, y_data, index, data_type):
 
 
 def prepare_dataset_from_hf5(hf5_file_source, hf5_file_destination):
-    """TODO: Update
-    Think how to make this as independet from the rest of the script as possible.
+    """ Think how to make this as independet from the rest of the script as possible.
     Load data from CIFAR10 database."""
     LOGGER_DATASET.info(DELIMITER)
     LOGGER_DATASET.info("Preparing dataset")
@@ -232,13 +229,13 @@ def prepare_dataset_from_hf5(hf5_file_source, hf5_file_destination):
         LOGGER_DATASET.info("Process data by chunks:")
 
         for lower in range(0, x_train_src.shape[0], size):
-            upper = lower+size if lower+size < x_train_src.shape[0] else x_train_src.shape[0]
+            upper = lower + size if lower + size < x_train_src.shape[0] else x_train_src.shape[0]
             LOGGER_DATASET.info("processing chunk [%s:%s]", lower, upper)
             x_train_dst[lower:upper] = np.divide(x_train_src[lower:upper], MAX_VAL)
             y_train_dst[lower:upper] = np_utils.to_categorical(y_train_src[lower:upper], nb_classes)
 
         for lower in range(0, x_test_src.shape[0], size):
-            upper = lower+size if lower+size < x_test_src.shape[0] else x_test_src.shape[0]
+            upper = lower + size if lower + size < x_test_src.shape[0] else x_test_src.shape[0]
             LOGGER_DATASET.info("processing chunk [%s:%s]", lower, upper)
             x_test_dst[lower:upper] = np.divide(x_test_src[lower:upper], MAX_VAL)
             y_test_dst[lower:upper] = np_utils.to_categorical(y_test_src[lower:upper], nb_classes)
@@ -273,7 +270,6 @@ def get_image(file_path):
     except IndexError:
         LOGGER_DATASET.info("problem with fix_image, %s: %s", file_path, raw_image.shape)
 
-
     return raw_image
 
 
@@ -283,12 +279,9 @@ def get_percentage(image):
     """
     row = image.shape[0]
     col = image.shape[1]
-    p_row = (100*(SIZE-1))/row
-    p_col = (100*(SIZE-1))/col
-    if p_row > p_col:
-        return p_row
-    else:
-        return p_col
+    p_row = (100 * (SIZE - 1)) / row
+    p_col = (100 * (SIZE - 1)) / col
+    return p_row if p_row > p_col else p_col
 
 
 def fix_image(img):
@@ -320,7 +313,7 @@ def pad_x(channel):
     LOGGER_DATASET.debug("Padding X of channgel: %s", channel.shape)
     diff = int((SIZE - channel.shape[0]) / 2)
     odd = int((SIZE - channel.shape[0]) % 2)
-    result = np.lib.pad(channel, ([diff, diff+odd], [0, 0]), 'constant', constant_values=(0))
+    result = np.lib.pad(channel, ([diff, diff + odd], [0, 0]), 'constant', constant_values=(0))
     LOGGER_DATASET.debug("result of padding: %s", result.shape)
     return result
 
@@ -330,7 +323,7 @@ def pad_y(channel):
     LOGGER_DATASET.debug("Padding Y of channgel: %s", channel.shape)
     diff = int((SIZE - channel.shape[1]) / 2)
     odd = int((SIZE - channel.shape[1]) % 2)
-    result = np.lib.pad(channel, ([0, 0], [diff, diff+odd]), 'constant', constant_values=(0))
+    result = np.lib.pad(channel, ([0, 0], [diff, diff + odd]), 'constant', constant_values=(0))
     LOGGER_DATASET.debug("result of padding: %s", result.shape)
     return result
 
@@ -340,7 +333,7 @@ def crop_x(channel):
     LOGGER_DATASET.debug("Cropping X channgel: %s", channel.shape)
     diff = int((channel.shape[0] - SIZE) / 2)
     odd = int((channel.shape[0] - SIZE) % 2)
-    result = channel[diff:channel.shape[0]-diff-odd, :]
+    result = channel[diff:channel.shape[0] - diff - odd, :]
     LOGGER_DATASET.debug("result of cropping: %s", result.shape)
     return result
 
@@ -350,7 +343,7 @@ def crop_y(channel):
     LOGGER_DATASET.debug("Cropping Y channgel: %s", channel.shape)
     diff = int((channel.shape[1] - SIZE) / 2)
     odd = int((channel.shape[1] - SIZE) % 2)
-    result = channel[:, diff:channel.shape[1]-diff-odd]
+    result = channel[:, diff:channel.shape[1] - diff - odd]
     LOGGER_DATASET.debug("result of cropping: %s", result.shape)
     return result
 
@@ -373,8 +366,8 @@ def generate_data(hf5_file_name, data_type, batch_size=None):
             step = grp.attrs["batch_size"]
         while True:
             if pos + step <= size:
-                yield (data_x[pos:pos+step],
-                       data_y[pos:pos+step])
+                yield (data_x[pos:pos + step],
+                       data_y[pos:pos + step])
             else:
                 temp = pos
                 pos = (pos + step) - size
@@ -397,18 +390,18 @@ def generate_random_indexes(indexes):
         return longest_index
     ind = [i for i in range(len(indexes))]
     count = 0
-    while len(ind) > 0:
+    while ind:
         if not count % 3:
             i = get_most_frequent(indexes)
-            if len(indexes[i]) > 0:
-                yield (i, indexes[i].pop(randint(0, len(indexes[i])-1)))
+            if indexes[i]:
+                yield (i, indexes[i].pop(randint(0, len(indexes[i]) - 1)))
             else:
                 ind.pop(i)
             count += 1
         else:
-            i = randint(0, len(ind)-1)
-            if len(indexes[ind[i]]) > 0:
-                yield (ind[i], indexes[ind[i]].pop(randint(0, len(indexes[ind[i]])-1)))
+            i = randint(0, len(ind) - 1)
+            if indexes[ind[i]]:
+                yield (ind[i], indexes[ind[i]].pop(randint(0, len(indexes[ind[i]]) - 1)))
             else:
                 ind.pop(i)
             count += 1
