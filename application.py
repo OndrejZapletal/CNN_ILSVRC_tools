@@ -5,19 +5,12 @@ import glob
 import json
 import os
 import re
-import sys
 import time
-from datetime import datetime
 
-from keras.datasets import cifar10
 from keras.models import model_from_json
-from keras.utils import np_utils
 
-from dataset_prepper import load_dataset_from_h5f
 from evaluator import evaluate
 from loggers import LOGGER_APP, LOGGER_DATASET, LOGGER_EVALUATION
-
-TEMP_FILE = '#in_progress#'
 
 
 def load_model_data(source_name):
@@ -67,25 +60,6 @@ def get_model_configuration(source):
         return json.loads(json_file.read())
 
 
-def load_dataset(configuration):
-    """TODO:
-    Think how to make this as independet from the rest of the script as possible.
-    Load data from CIFAR10 database."""
-    if configuration['source']:
-        (x_train, y_train), (x_test, y_test) = load_dataset_from_h5f(configuration['source'])
-    else:
-        nb_classes = 10
-        max_val = 255
-        (x_train, y_train), (x_test, y_test) = cifar10.load_data()
-        x_train = x_train.astype('float32')
-        x_test = x_test.astype('float32')
-        x_train /= max_val
-        x_test /= max_val
-        y_train = np_utils.to_categorical(y_train, nb_classes)
-        y_test = np_utils.to_categorical(y_test, nb_classes)
-    return (x_train, y_train), (x_test, y_test)
-
-
 def load_optimizers():
     """Function loades optimizers from standalone file."""
     optimizers = ['adam', 'nadam']
@@ -93,25 +67,6 @@ def load_optimizers():
         optimizers = optimizers_file.read().strip().split(',')
         LOGGER_APP.debug('loading optimizers from file: %s', optimizers)
     return optimizers
-
-
-def create_temp(model_data, optimizers):
-    """Create temp file with basic model settings."""
-    with open(TEMP_FILE, 'w') as temp_file:
-        temp_file.write("%s\n" % datetime.utcnow())
-        temp_file.write("%s\n" % str(model_data[1]['name']))
-        temp_file.write("%s\n" % str(optimizers))
-        temp_file.write("%s\n" % str(model_data[1]['batch_size']))
-        temp_file.write("%s\n" % str(model_data[1]['epochs']))
-        temp_file.write("%s" % str(model_data[1]['verbose']))
-
-
-def remove_temp():
-    """Remove temp file after training of model is finished."""
-    try:
-        os.remove(TEMP_FILE)
-    except OSError:
-        LOGGER_APP.debug("This might be a problem since this shuldn't happen!")
 
 
 def move_model_source(model_name):
@@ -137,7 +92,6 @@ def main_loop():
             optimizers = load_optimizers()
             new_models = check_for_new_models(trained_models)
             for model_name in new_models:
-                model_sucessfully_tested = False
                 LOGGER_APP.info("Found model: %s", str(model_name))
                 try:
                     model_data = load_model_data(model_name)
@@ -145,30 +99,14 @@ def main_loop():
                     LOGGER_APP.info("Configuration file is missing!")
                     continue
 
-                try:
-                    dataset = load_dataset(model_data[1])
-                except Exception as general_exception:
-                    LOGGER_APP.info("Problem during loading of dataset!")
-                    LOGGER_APP.info(general_exception, sys.exc_info())
-                    continue
+                evaluate(model_data, optimizers)
+                trained_models.append(model_name)
+                LOGGER_APP.info("Successfully tested model: %s", str(model_name))
+                move_model_source(model_name)
 
-                try:
-                    create_temp(model_data, optimizers)
-                    model_sucessfully_tested = evaluate(model_data, optimizers, dataset)
-                    remove_temp()
-                except Exception as general_exception:
-                    LOGGER_APP.info("Unexpected Error during model evaluation:\n" \
-                                    "Try to delete model that is causing the problem")
-                    LOGGER_APP.info(general_exception, sys.exc_info())
-                    remove_temp()
-
-                if model_sucessfully_tested:
-                    trained_models.append(model_name)
-                    LOGGER_APP.info("Successfully tested model: %s", str(model_name))
-                    move_model_source(model_name)
-            wait_time_interval(1)
         except Exception as general_exception:
-            LOGGER_APP.error(general_exception, sys.exc_info())
+            LOGGER_APP.error(general_exception)
+        wait_time_interval(1)
 
 
 if __name__ == '__main__':
