@@ -19,7 +19,7 @@ def save_models(models):
     """Save models to JSON"""
     for _, model in enumerate(models, start=1):
         # model_name = "%s_%s" % (i, name)
-        model_name = "complex_model_for_imagenet"
+        model_name = "epochs_100_steps_per_epoch_1000_train_batch_size_10"
         # save_model_to_file(model(), model_name)
         save_model_generator_to_file(model(), model_name)
 
@@ -52,16 +52,16 @@ def save_model_to_file(model, name):
 def save_model_generator_to_file(model, name):
     """Save model to json."""
     config = """{
-    "epochs" : 300,
+    "epochs" : 100,
     "loss" : "categorical_crossentropy",
     "metrics" : "accuracy",
     "name" : "%s",
-    "source" : "image_net_prepared.h5",
-    "steps_per_epoch" : 10,
-    "test_batch_size" : 10
-    "train_batch_size" : 200,
-    "validation_steps" : 10,
-    "verbose" : 1,
+    "source" : "../datasets/image_net_prepared.h5",
+    "steps_per_epoch" : 1000,
+    "test_batch_size" : 10,
+    "train_batch_size" : 50,
+    "validation_steps" : 1000,
+    "verbose" : 1
 }""" % name
     try:
         with open("../models/model_%s_parameters.json" % name, 'w') as parameters, \
