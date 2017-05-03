@@ -33,6 +33,48 @@ DELIMITER = "*" * 30
 NUM_OF_SELECTED_CLASSES = 100
 
 
+def prepare_dataset_from_hf5(hf5_file_source, hf5_file_destination):
+    """ Think how to make this as independet from the rest of the script as possible.
+    Load data from CIFAR10 database."""
+    LOGGER_DATASET.info(DELIMITER)
+    LOGGER_DATASET.info("Preparing dataset")
+    LOGGER_DATASET.info(DELIMITER)
+    with h5py.File(hf5_file_source, 'r') as hf5_r, h5py.File(hf5_file_destination, 'w') as hf5_w:
+        test_grp_dst = hf5_w.create_group("/data/test")
+        train_grp_dst = hf5_w.create_group("/data/train")
+
+        nb_classes = hf5_r["data"].attrs['nb_classes']
+        train_grp_dst.attrs['batch_size'] = hf5_r["/data/train"].attrs['batch_size']
+        test_grp_dst.attrs['batch_size'] = hf5_r["/data/test"].attrs['batch_size']
+
+        x_train_src = hf5_r["/data/train/x"]
+        y_train_src = hf5_r["/data/train/y"]
+        x_test_src = hf5_r["/data/test/x"]
+        y_test_src = hf5_r["/data/test/y"]
+
+        LOGGER_DATASET.info("Loading data from HDF5 file")
+        x_train_dst = train_grp_dst.create_dataset("x", x_train_src.shape, dtype=np.float32, chunks=True)
+        y_train_dst = train_grp_dst.create_dataset("y", (y_train_src.shape[0], nb_classes), chunks=True)
+        x_test_dst = test_grp_dst.create_dataset("x", x_test_src.shape, dtype=np.float32, chunks=True)
+        y_test_dst = test_grp_dst.create_dataset("y", (y_test_src.shape[0], nb_classes), chunks=True)
+
+        LOGGER_DATASET.info("Process data by chunks:")
+
+        for lower in range(0, x_train_src.shape[0], BATCH_SIZE):
+            upper = lower + BATCH_SIZE if lower + BATCH_SIZE < x_train_src.shape[0] else x_train_src.shape[0]
+            LOGGER_DATASET.info("processing chunk [%s:%s]", lower, upper)
+            x_train_dst[lower:upper] = np.divide(x_train_src[lower:upper], MAX_VAL)
+            y_train_dst[lower:upper] = np_utils.to_categorical(y_train_src[lower:upper], nb_classes)
+
+        for lower in range(0, x_test_src.shape[0], BATCH_SIZE):
+            upper = lower + BATCH_SIZE if lower + BATCH_SIZE < x_test_src.shape[0] else x_test_src.shape[0]
+            LOGGER_DATASET.info("processing chunk [%s:%s]", lower, upper)
+            x_test_dst[lower:upper] = np.divide(x_test_src[lower:upper], MAX_VAL)
+            y_test_dst[lower:upper] = np_utils.to_categorical(y_test_src[lower:upper], nb_classes)
+
+        LOGGER_DATASET.info("finished")
+
+
 def load_dataset_from_images(source, hdf5_file_name):
     """Function loads images from source directory and loads them into
     numpy ndarrys.
@@ -92,86 +134,37 @@ def split_data(hf5_file_name_src, hf5_file_name_dst):
     LOGGER_DATASET.info("Splitting date into train and test.")
     LOGGER_DATASET.info(DELIMITER)
     with h5py.File(hf5_file_name_src, 'r') as hf5_r, h5py.File(hf5_file_name_dst, 'w') as hf5_w:
-        data_grp = hf5_r["data"]
-        split_data_grp = hf5_w.create_group("data")
-        train_grp = split_data_grp.create_group("train")
-        test_grp = split_data_grp.create_group("test")
-
-        train_grp.attrs['batch_size'] = TRAIN_BATCH_SIZE
-        test_grp.attrs['batch_size'] = TEST_BATCH_SIZE
-
-        split_data_grp.attrs["nb_classes"] = data_grp.attrs["nb_classes"]
-        split_data_grp.attrs['num_of_images'] = data_grp.attrs['num_of_images']
-
-        train_est = int(data_grp.attrs['num_of_images'] * TRAIN_TEST_RATION)
-        test_est = data_grp.attrs['num_of_images'] - train_est
-
-        LOGGER_DATASET.info("creating datasets")
-        x_train = train_grp.create_dataset("x", (train_est, SIZE, SIZE, 3), maxshape=(None, SIZE, SIZE, 3))
-        y_train = train_grp.create_dataset("y", (train_est, 1), maxshape=(None, 1))
-        x_test = test_grp.create_dataset("x", (test_est, SIZE, SIZE, 3), maxshape=(None, SIZE, SIZE, 3))
-        y_test = test_grp.create_dataset("y", (test_est, 1), maxshape=(None, 1))
-
-        index_train = 0
-        index_test = 0
-
-        indexes = []
-        datasets_src = data_grp.values()
-        datasets_ref = []
-
-        for dataset in datasets_src:
-            indexes.append([i for i in range(len(dataset))])
-            datasets_ref.append(dataset)
-
-        image_batch_train_x = []
-        image_batch_train_y = []
-        image_batch_test_x = []
-        image_batch_test_y = []
-
-        LOGGER_DATASET.info("Staring splitting:")
+        x_train, y_train, x_test, y_test, data, indexes = prepare_references(hf5_r, hf5_w)
+        x_train_batch, y_train_batch, x_test_batch, y_test_batch = [], [], [], []
+        index_train, index_test = 0, 0
 
         for index, (category, image_index) in enumerate(generate_random_indexes(indexes)):
-
             LOGGER_DATASET.debug("splitting dataset, index %s, category: %s, image: %s)", index, category, image_index)
-
-            image = datasets_ref[category][image_index, :, :, :]
+            image = data[category][image_index, :, :, :]
 
             if index % 10:
-                check_size(x_train, y_train, index_train, "train")
-                image_batch_train_x.append(image)
-                image_batch_train_y.append(category)
+                x_train_batch.append(image)
+                y_train_batch.append(category)
                 index_train += 1
-
-                if len(image_batch_train_x) == BATCH_SIZE:
-                    x_train[index_train - BATCH_SIZE:index_train] = np.stack(image_batch_train_x, axis=0)
-                    y_train[index_train - BATCH_SIZE:index_train] = np.array(image_batch_train_y).reshape(BATCH_SIZE, 1)
-                    image_batch_train_x = []
-                    image_batch_train_y = []
-
+                if len(x_train_batch) == BATCH_SIZE:
+                    write_batch(x_train, y_train, x_train_batch, y_train_batch, index_train, "train")
+                    x_train_batch, y_train_batch = [], []
             else:
-                check_size(x_test, y_test, index_test, "test")
-                image_batch_test_x.append(image)
-                image_batch_test_y.append(category)
+                x_test_batch.append(image)
+                y_test_batch.append(category)
                 index_test += 1
+                if len(x_test_batch) == BATCH_SIZE:
+                    write_batch(x_test, y_test, x_test_batch, y_test_batch, index_test, "test")
+                    x_test_batch, y_test_batch = [], []
 
-                if len(image_batch_test_x) == BATCH_SIZE:
-                    x_test[index_test - BATCH_SIZE:index_test] = np.stack(image_batch_test_x, axis=0)
-                    y_test[index_test - BATCH_SIZE:index_test] = np.array(image_batch_test_y).reshape(BATCH_SIZE, 1)
-                    image_batch_test_x = []
-                    image_batch_test_y = []
+        if x_train_batch:
+            write_batch(x_train, y_train, x_train_batch, y_train_batch, index_train, "train")
 
-        if image_batch_train_x:
-            x_train[index_train - len(image_batch_train_x):index_train] = np.stack(image_batch_train_x, axis=0)
-            y_train[index_train - len(image_batch_train_y):index_train] = np.array(
-                image_batch_train_y).reshape(len(image_batch_train_y), 1)
+        if x_test_batch:
+            write_batch(x_test, y_test, x_test_batch, y_test_batch, index_test, "test")
 
-        if image_batch_test_x:
-            x_test[index_test - len(image_batch_test_x):index_test] = np.stack(image_batch_test_x, axis=0)
-            y_test[index_test - len(image_batch_test_y):index_test] = np.array(
-                image_batch_test_y).reshape(len(image_batch_test_y), 1)
-
-        LOGGER_DATASET.debug("Decreasing the size of datasets to fit the data exactly.")
         if x_train.shape[0] > index_train:
+            LOGGER_DATASET.debug("Decreasing the size of dataset to fit the data exactly.")
             LOGGER_DATASET.info("new x_train shape: %s, original shape: %s",
                                 (index_train, SIZE, SIZE, 3), x_train.shape)
             x_train.resize((index_train, SIZE, SIZE, 3))
@@ -179,17 +172,18 @@ def split_data(hf5_file_name_src, hf5_file_name_dst):
             y_train.resize((index_train, 1))
 
         if x_test.shape[0] > index_test:
+            LOGGER_DATASET.debug("Decreasing the size of dataset to fit the data exactly.")
             LOGGER_DATASET.info("new x_test shape: %s, original shape: %s", (index_test, SIZE, SIZE, 3), x_test.shape)
             x_test.resize((index_test, SIZE, SIZE, 3))
             LOGGER_DATASET.info("new y_test shape: %s, original shape: %s", (index_test, 1), y_test.shape)
             y_test.resize((index_test, 1))
 
-        train_grp.attrs['num_of_images'] = index_train
-        test_grp.attrs['num_of_images'] = index_test
+        hf5_w["data/train"].attrs['num_of_images'] = index_train
+        hf5_w["data/test"].attrs['num_of_images'] = index_test
 
 
-def check_size(x_data, y_data, index, data_type):
-    """Checking size of destination by index size """
+def write_batch(x_data, y_data, x_batch, y_batch, index, data_type):
+    """Function writes batch of data into hdf5 file. """
     if x_data.shape[0] <= index:
         LOGGER_DATASET.info("Increasing the size of %s datasets to fit the data.", data_type)
         LOGGER_DATASET.info("new x_%s shape: %s, original shape: %s",
@@ -199,48 +193,44 @@ def check_size(x_data, y_data, index, data_type):
                             data_type, (y_data.shape[0] + RESHAPE_STEP, 1), y_data.shape)
         y_data.resize((y_data.shape[0] + RESHAPE_STEP, 1))
 
+    if len(x_batch) < BATCH_SIZE:
+        x_data[index - len(x_batch):index] = np.stack(x_batch, axis=0)
+        y_data[index - len(y_batch):index] = np.array(y_batch).reshape(len(y_batch), 1)
+    else:
+        x_data[index - BATCH_SIZE:index] = np.stack(x_batch, axis=0)
+        y_data[index - BATCH_SIZE:index] = np.array(y_batch).reshape(BATCH_SIZE, 1)
 
-def prepare_dataset_from_hf5(hf5_file_source, hf5_file_destination):
-    """ Think how to make this as independet from the rest of the script as possible.
-    Load data from CIFAR10 database."""
-    LOGGER_DATASET.info(DELIMITER)
-    LOGGER_DATASET.info("Preparing dataset")
-    LOGGER_DATASET.info(DELIMITER)
-    with h5py.File(hf5_file_source, 'r') as hf5_r, h5py.File(hf5_file_destination, 'w') as hf5_w:
-        test_grp_dst = hf5_w.create_group("/data/test")
-        train_grp_dst = hf5_w.create_group("/data/train")
 
-        nb_classes = hf5_r["data"].attrs['nb_classes']
-        size = hf5_r["/data/train"].attrs['batch_size']
-        train_grp_dst.attrs['batch_size'] = hf5_r["/data/train"].attrs['batch_size']
-        test_grp_dst.attrs['batch_size'] = hf5_r["/data/test"].attrs['batch_size']
+def prepare_references(hf5_src, hf5_dst):
+    """Returns list of references used during data spliting."""
+    data_grp = hf5_src["data"]
+    split_data_grp = hf5_dst.create_group("data")
+    train_grp = split_data_grp.create_group("train")
+    test_grp = split_data_grp.create_group("test")
 
-        x_train_src = hf5_r["/data/train/x"]
-        y_train_src = hf5_r["/data/train/y"]
-        x_test_src = hf5_r["/data/test/x"]
-        y_test_src = hf5_r["/data/test/y"]
+    train_grp.attrs['batch_size'] = TRAIN_BATCH_SIZE
+    test_grp.attrs['batch_size'] = TEST_BATCH_SIZE
 
-        LOGGER_DATASET.info("Loading data from HDF5 file")
-        x_train_dst = train_grp_dst.create_dataset("x", x_train_src.shape, dtype=np.float32, chunks=True)
-        y_train_dst = train_grp_dst.create_dataset("y", (y_train_src.shape[0], nb_classes), chunks=True)
-        x_test_dst = test_grp_dst.create_dataset("x", x_test_src.shape, dtype=np.float32, chunks=True)
-        y_test_dst = test_grp_dst.create_dataset("y", (y_test_src.shape[0], nb_classes), chunks=True)
+    split_data_grp.attrs["nb_classes"] = data_grp.attrs["nb_classes"]
+    split_data_grp.attrs['num_of_images'] = data_grp.attrs['num_of_images']
 
-        LOGGER_DATASET.info("Process data by chunks:")
+    train_est = int(data_grp.attrs['num_of_images'] * TRAIN_TEST_RATION)
+    test_est = data_grp.attrs['num_of_images'] - train_est
 
-        for lower in range(0, x_train_src.shape[0], size):
-            upper = lower + size if lower + size < x_train_src.shape[0] else x_train_src.shape[0]
-            LOGGER_DATASET.info("processing chunk [%s:%s]", lower, upper)
-            x_train_dst[lower:upper] = np.divide(x_train_src[lower:upper], MAX_VAL)
-            y_train_dst[lower:upper] = np_utils.to_categorical(y_train_src[lower:upper], nb_classes)
+    LOGGER_DATASET.info("creating datasets")
+    x_train = train_grp.create_dataset("x", (train_est, SIZE, SIZE, 3), maxshape=(None, SIZE, SIZE, 3))
+    y_train = train_grp.create_dataset("y", (train_est, 1), maxshape=(None, 1))
+    x_test = test_grp.create_dataset("x", (test_est, SIZE, SIZE, 3), maxshape=(None, SIZE, SIZE, 3))
+    y_test = test_grp.create_dataset("y", (test_est, 1), maxshape=(None, 1))
 
-        for lower in range(0, x_test_src.shape[0], size):
-            upper = lower + size if lower + size < x_test_src.shape[0] else x_test_src.shape[0]
-            LOGGER_DATASET.info("processing chunk [%s:%s]", lower, upper)
-            x_test_dst[lower:upper] = np.divide(x_test_src[lower:upper], MAX_VAL)
-            y_test_dst[lower:upper] = np_utils.to_categorical(y_test_src[lower:upper], nb_classes)
+    indexes = []
+    data = []
 
-        LOGGER_DATASET.info("finished")
+    for dataset in  data_grp.values():
+        indexes.append([i for i in range(len(dataset))])
+        data.append(dataset)
+
+    return (x_train, y_train, x_test, y_test, data, indexes)
 
 
 def get_image(file_path):
@@ -409,8 +399,8 @@ def generate_random_indexes(indexes):
 
 def main():
     """Main function"""
-    load_dataset_from_images(SOURCE, HDF5_CAT)
-    split_data(HDF5_CAT, HDF5_SPL)
+    # load_dataset_from_images(SOURCE, HDF5_CAT)
+    # split_data(HDF5_CAT, HDF5_SPL)
     prepare_dataset_from_hf5(HDF5_SPL, HDF5_PRP)
 
 
