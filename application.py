@@ -12,6 +12,7 @@ from keras.models import model_from_json
 from evaluator import evaluate
 from loggers import LOGGER_APP, LOGGER_DATASET, LOGGER_EVALUATION
 
+GPU_UNIT = os.environ['GPU_UNIT']
 
 def load_model_data(source_name):
     """TODO: Make sure that you are getting correct information
@@ -25,7 +26,7 @@ def check_for_new_models(list_of_models):
     """TODO: retrun value of each model_name should contain only unique part of the name.
     i.e timestamp and iteration.
     """
-    list_of_files = glob.glob('../models/model_*_parameters.json')
+    list_of_files = glob.glob('../models_%s/model_*_parameters.json' % GPU_UNIT)
     new_models = []
     for file_name in list_of_files:
         try:
@@ -39,7 +40,7 @@ def check_for_new_models(list_of_models):
 
 def parse_model_name(file_name):
     """Parser is extracting part of the name betwen words 'model_' and '_parameters.json'."""
-    file_parser = re.compile(r"\.\./models/model_(.*)_parameters\.json")
+    file_parser = re.compile(r"\.\./models_%s/model_(.*)_parameters\.json" % GPU_UNIT)
     result = file_parser.match(file_name).group(1)
     LOGGER_APP.debug(result)
     if not result:
@@ -48,15 +49,15 @@ def parse_model_name(file_name):
 
 
 def get_model(source):
-    """TODO: This function will read vales from text file to set model paramters."""
-    with open("../models/model_%s_parameters.json" % source, 'r') as json_file:
+    """TODO: This function will read vales from text file to set model parameters."""
+    with open("../models_%s/model_%s_parameters.json" % (GPU_UNIT, source), 'r') as json_file:
         loaded_model_json = json_file.read()
         return model_from_json(loaded_model_json)
 
 
 def get_model_configuration(source):
     """TODO: This function will read vales from JSON to configure model. """
-    with open("../models/model_%s_configuration.json" % source, 'r') as json_file:
+    with open("../models_%s/model_%s_configuration.json" % (GPU_UNIT, source), 'r') as json_file:
         return json.loads(json_file.read())
 
 
@@ -73,10 +74,10 @@ def move_model_source(model_name):
     """ When the evaluation of the model is finished both json files are
     moved to '../trained_models/' folder
     """
-    os.rename("../models/model_%s_parameters.json" % model_name,
-              "../trained_models/model_%s_parameters.json" % model_name)
-    os.rename("../models/model_%s_configuration.json" % model_name,
-              "../trained_models/model_%s_configuration.json" % model_name)
+    os.rename("../models_%s/model_%s_parameters.json" % (GPU_UNIT, model_name),
+              "../trained_models_%s/model_%s_parameters.json" % (GPU_UNIT, model_name))
+    os.rename("../models_%s/model_%s_configuration.json" % (GPU_UNIT, model_name),
+              "../trained_models_%s/model_%s_configuration.json" % (GPU_UNIT, model_name))
 
 
 def wait_time_interval(interval):
@@ -89,7 +90,6 @@ def main_loop():
     trained_models = []
     while True:
         try:
-            optimizers = load_optimizers()
             new_models = check_for_new_models(trained_models)
             for model_name in new_models:
                 LOGGER_APP.info("Found model: %s", str(model_name))
@@ -99,7 +99,7 @@ def main_loop():
                     LOGGER_APP.info("Configuration file is missing!")
                     continue
 
-                if evaluate(model_data, optimizers):
+                if evaluate(model_data):
                     trained_models.append(model_name)
                     LOGGER_APP.info("Successfully tested model: %s", str(model_name))
                     move_model_source(model_name)

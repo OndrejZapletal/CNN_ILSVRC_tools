@@ -1,5 +1,7 @@
 import logging
+import os
 
+GPU_UNIT = os.environ['GPU_UNIT']
 
 def create_datasets_logger():
     """Logger for dataset_prepper.py """
@@ -11,7 +13,7 @@ def create_datasets_logger():
     formatter = logging.Formatter('%(asctime)s - %(message)s')
 
     # file handler
-    handler_dbg = logging.FileHandler('../logs/dataset_prepper.log')
+    handler_dbg = logging.FileHandler('../logs_%s/dataset_prepper.log' % GPU_UNIT)
     handler_dbg.setLevel(logging.DEBUG)
     handler_dbg.setFormatter(formatter)
 
@@ -35,7 +37,7 @@ def create_performance_logger():
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
     # file handler
-    handler_dbg = logging.FileHandler('../logs/test_perormance.log')
+    handler_dbg = logging.FileHandler('../logs_%s/test_perormance.log' % GPU_UNIT)
     handler_dbg.setLevel(logging.DEBUG)
     handler_dbg.setFormatter(formatter)
 
@@ -59,7 +61,7 @@ def create_evaluation_logger():
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
     # file handler
-    handler_dbg = logging.FileHandler('../logs/evaluation.log')
+    handler_dbg = logging.FileHandler('../logs_%s/evaluation.log' % GPU_UNIT)
     handler_dbg.setLevel(logging.DEBUG)
     handler_dbg.setFormatter(formatter)
 
@@ -83,7 +85,7 @@ def create_application_logger():
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
     # file handler
-    handler_dbg = logging.FileHandler('../logs/application.log')
+    handler_dbg = logging.FileHandler('../logs_%s/application.log' % GPU_UNIT)
     handler_dbg.setLevel(logging.DEBUG)
     handler_dbg.setFormatter(formatter)
 
