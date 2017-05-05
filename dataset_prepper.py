@@ -7,6 +7,7 @@ from random import randint, sample
 
 import h5py
 import numpy as np
+from keras.preprocessing.image import ImageDataGenerator
 from keras.utils import np_utils
 from scipy.misc import imresize
 from scipy.ndimage import imread
@@ -19,7 +20,10 @@ DESTINATION = os.path.expanduser("~/projects/ILSVRC/destination_dataset/")
 
 HDF5_CAT = "../datasets/image_net_categorized.h5"
 HDF5_SPL = "../datasets/image_net_split.h5"
-HDF5_PRP = "../datasets/image_net_prepared.h5"
+HDF5_PRP = "../datasets/image_net_40_cat.h5"
+
+TRAIN_SIZE = 224
+DIFF = 256 - TRAIN_SIZE
 
 SIZE = 256
 MAX_VAL = 255
@@ -143,9 +147,11 @@ def split_data(hf5_file_name_src, hf5_file_name_dst):
         x_train_batch, y_train_batch, x_test_batch, y_test_batch = [], [], [], []
         index_train, index_test = 0, 0
 
+        num_of_images = hf5_r["data"].attrs['num_of_images']
+
         for index, (category, image_index) in enumerate(generate_random_indexes(indexes)):
-            LOGGER_DATASET.debug("splitting dataset, index %s, category: %s, image: %s)",
-                                 index, category, image_index)
+            LOGGER_DATASET.info("splitting image %s of %s (category: %s, image: %s)",
+                                 index, num_of_images, category, image_index)
             image = data[category][image_index, :, :, :]
 
             if index % 10:
@@ -363,19 +369,40 @@ def generate_train_data(hf5_file_name, batch_size=None):
         data_y = grp["y"]
         pos = 0
         size = data_x.shape[0]
+
+        datagen = ImageDataGenerator(
+            rotation_range=40,
+            width_shift_range=0.2,
+            height_shift_range=0.2,
+            shear_range=0.2,
+            zoom_range=0.2,
+            horizontal_flip=True,
+            fill_mode='nearest')
+
         if batch_size:
             step = batch_size
         else:
             step = grp.attrs["batch_size"]
+
         while True:
             if pos + step <= size:
-                yield (data_x[pos:pos + step],
-                       data_y[pos:pos + step])
+                batch_x = data_x[pos:pos + step, :, :, :]
+                batch_y = data_y[pos:pos + step, :]
             else:
                 temp = pos
                 pos = (pos + step) - size
-                yield (np.concatenate((data_x[0:pos], data_x[temp:size])),
-                       np.concatenate((data_y[0:pos], data_y[temp:size])))
+                batch_x = np.concatenate((data_x[0:pos, :, :, :], data_x[temp:size, :, :, :]))
+                batch_y = np.concatenate((data_y[0:pos, :], data_y[temp:size, :]))
+
+            undersized_batch_x =  np.empty((step, TRAIN_SIZE, TRAIN_SIZE, 3))
+
+            for batch in datagen.flow(batch_x, batch_size=step):
+                for index, image in enumerate(batch):
+                    undersized_batch_x[index, :, :, :] = get_center_patch(image)
+                break
+
+            yield (undersized_batch_x, batch_y)
+
             pos += step
 
 
@@ -397,13 +424,25 @@ def generate_test_data(hf5_file_name, batch_size=None):
             step = grp.attrs["batch_size"]
         while True:
             if pos + step <= size:
-                yield (data_x[pos:pos + step],
-                       data_y[pos:pos + step])
+                batch_x = data_x[pos:pos + step, :, :, :]
+                batch_y = data_y[pos:pos + step, :]
+
             else:
                 temp = pos
                 pos = (pos + step) - size
-                yield (np.concatenate((data_x[0:pos], data_x[temp:size])),
-                       np.concatenate((data_y[0:pos], data_y[temp:size])))
+
+                batch_x = np.concatenate((data_x[0:pos, :, :, :], data_x[temp:size, :, :, :]))
+                batch_y = np.concatenate((data_y[0:pos, :], data_y[temp:size, :]))
+
+
+            undersized_batch_x =  np.empty((step, TRAIN_SIZE, TRAIN_SIZE, 3))
+
+            for index, image in enumerate(batch_x):
+                undersized_batch_x[index, :, :, :] = get_center_patch(image)
+
+            yield (undersized_batch_x, batch_y)
+
+
             pos += step
 
 
@@ -444,11 +483,16 @@ def generate_patches(image, count):
     for _ in range(count):
         x_rand = randint(0, DIFF)
         y_rand = randint(0, DIFF)
-        patch = image[x_rand:SIZE+x_rand, y_rand:SIZE+y_rand, :]
+        patch = image[x_rand:TRAIN_SIZE+x_rand, y_rand:TRAIN_SIZE+y_rand, :]
         if randint(0, 1):
-            patch = np.flip(patch, 0)
+            patch = np.flip(patch, 1)
         patches.append(patch)
     return patches
+
+
+def get_center_patch(image):
+    diff = int((SIZE-TRAIN_SIZE)/2)
+    return image[diff:-diff, diff:-diff, :]
 
 
 def main():
