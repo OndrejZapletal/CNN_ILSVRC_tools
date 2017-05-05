@@ -12,27 +12,30 @@ from keras.optimizers import SGD, adam, nadam
 
 def get_model_configuration(index):
     """Create JSON file with model configuration. """
-    name = "g-force_test"
+    name = "testing_batch_size"
+    dataset = "image_net_40_cat"
+    classes = 40
 
     config, settings, optimization, training, testing = {}, {}, {}, {}, {}
-    config['name'] = "%s_%s" % (name, index)
     config['gpu_unit'] = get_gpu_configuration()
+
 
     optimization['loss'] = "categorical_crossentropy"
     optimization['metrics'] = ["accuracy"]
-    optimization['optimizers'] = [get_optimizer("adam")]
-
+    optimization['optimizers'] = [get_optimizer("adam"),
+                                  get_optimizer("nadam"),
+                                  get_optimizer("sgd")]
     training['epochs'] = 30
-    training['steps_per_epoch'] = 4000
-    training['train_batch_size'] = 10
+    training['steps_per_epoch'] = 200
+    training['train_batch_size'] = 20
 
+    testing['validation_steps'] = 180
     testing['test_batch_size'] = 10
-    testing['validation_steps'] = 100
 
     # Source for Dataset. If empty the CIFAR10 database is used
-    settings['source'] = "../datasets/image_net_40_cat.h5"
-    settings['shape'] = (256, 256, 3)
-    settings['nb_classes'] = 40
+    settings['source'] = "../datasets/%s.h5" % dataset
+    settings['shape'] = (224, 224, 3)
+    settings['nb_classes'] = classes
     # use pre-trained weights otherwise left empty
     settings['weights'] = ""
     # settings['weights'] = "../models_%s/model_%s_%s_weights.h5" % (
@@ -43,6 +46,10 @@ def get_model_configuration(index):
     config['optimization'] = optimization
     config['training'] = training
     config['testing'] = testing
+    params = "epochs_%s_steps_%s_batch_size_%s" % (
+        training['epochs'], training['steps_per_epoch'], training['train_batch_size'])
+
+    config['name'] = "%s__%s__%s__%s" % (dataset, name, index, params)
 
     return config
 
@@ -55,19 +62,18 @@ def create_model(shape, num_classes):
     model.add(layer1)
     model.add(Activation('relu'))
 
+    model.add(MaxPooling2D(pool_size=(3, 3), strides=(2, 2)))
+
     layer2 = Conv2D(128, (5, 5), padding='same')
+
     model.add(layer2)
     model.add(Activation('relu'))
 
-    model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Dropout(0.25))
+    model.add(MaxPooling2D(pool_size=(3, 3), strides=(2, 2)))
 
     layer3 = Conv2D(190, (3, 3), padding='same')
     model.add(layer3)
     model.add(Activation('relu'))
-
-    model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Dropout(0.25))
 
     layer4 = Conv2D(190, (3, 3), padding='same')
     model.add(layer4)
@@ -77,12 +83,11 @@ def create_model(shape, num_classes):
     model.add(layer5)
     model.add(Activation('relu'))
 
-    model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Dropout(0.25))
+    model.add(MaxPooling2D(pool_size=(3, 3), strides=(2, 2)))
 
     model.add(Flatten())
 
-    model.add(Dense(1024))
+    model.add(Dense(512))
     model.add(Activation('relu'))
     model.add(Dropout(0.5))
 
@@ -104,7 +109,8 @@ def get_gpu_configuration():
     elif gpu_config == "1":
         return "tesla"
     else:
-        print("You have to specify GPU unit.\nExiting!")
+        print("You have to specify GPU unit.\n"
+              "Exiting!")
         sys.exit(0)
 
 def get_optimizer(optimizer):
@@ -126,9 +132,9 @@ def get_optimizer(optimizer):
 
 def save_model_to_file(model, config):
     try:
-        with open("../models_%s/model_%s_parameters.json" % (
+        with open("../models_%s/%s__parameters.json" % (
                 config['gpu_unit'], config['name']), 'w') as parameters, \
-             open("../models_%s/model_%s_configuration.json" % (
+             open("../models_%s/%s__configuration.json" % (
                  config['gpu_unit'], config['name']), 'w') as configuration:
 
             model_specification = model(config['settings']['shape'],

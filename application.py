@@ -26,7 +26,7 @@ def check_for_new_models(list_of_models):
     """TODO: retrun value of each model_name should contain only unique part of the name.
     i.e timestamp and iteration.
     """
-    list_of_files = glob.glob('../models_%s/model_*_parameters.json' % GPU_UNIT)
+    list_of_files = glob.glob('../models_%s/*__parameters.json' % GPU_UNIT)
     new_models = []
     for file_name in list_of_files:
         try:
@@ -40,7 +40,7 @@ def check_for_new_models(list_of_models):
 
 def parse_model_name(file_name):
     """Parser is extracting part of the name betwen words 'model_' and '_parameters.json'."""
-    file_parser = re.compile(r"\.\./models_%s/model_(.*)_parameters\.json" % GPU_UNIT)
+    file_parser = re.compile(r"\.\./models_%s/(.*)__parameters\.json" % GPU_UNIT)
     result = file_parser.match(file_name).group(1)
     LOGGER_APP.debug(result)
     if not result:
@@ -50,34 +50,26 @@ def parse_model_name(file_name):
 
 def get_model(source):
     """TODO: This function will read vales from text file to set model parameters."""
-    with open("../models_%s/model_%s_parameters.json" % (GPU_UNIT, source), 'r') as json_file:
+    with open("../models_%s/%s__parameters.json" % (GPU_UNIT, source), 'r') as json_file:
         loaded_model_json = json_file.read()
         return model_from_json(loaded_model_json)
 
 
 def get_model_configuration(source):
     """TODO: This function will read vales from JSON to configure model. """
-    with open("../models_%s/model_%s_configuration.json" % (GPU_UNIT, source), 'r') as json_file:
+    with open("../models_%s/%s__configuration.json" % (GPU_UNIT, source), 'r') as json_file:
         return json.loads(json_file.read())
 
-
-def load_optimizers():
-    """Function loades optimizers from standalone file."""
-    optimizers = ['adam', 'nadam']
-    with open("../configuration/optimizers.txt", 'r') as optimizers_file:
-        optimizers = optimizers_file.read().strip().split(',')
-        LOGGER_APP.debug('loading optimizers from file: %s', optimizers)
-    return optimizers
 
 
 def move_model_source(model_name):
     """ When the evaluation of the model is finished both json files are
     moved to '../trained_models/' folder
     """
-    os.rename("../models_%s/model_%s_parameters.json" % (GPU_UNIT, model_name),
-              "../trained_models_%s/model_%s_parameters.json" % (GPU_UNIT, model_name))
-    os.rename("../models_%s/model_%s_configuration.json" % (GPU_UNIT, model_name),
-              "../trained_models_%s/model_%s_configuration.json" % (GPU_UNIT, model_name))
+    os.rename("../models_%s/%s__parameters.json" % (GPU_UNIT, model_name),
+              "../trained_models_%s/%s__parameters.json" % (GPU_UNIT, model_name))
+    os.rename("../models_%s/%s__configuration.json" % (GPU_UNIT, model_name),
+              "../trained_models_%s/%s__configuration.json" % (GPU_UNIT, model_name))
 
 
 def wait_time_interval(interval):

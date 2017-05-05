@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """This is test of keras library."""
 
+import csv
 import glob
 import json
 import logging
+import os
 import re
 
 LAYER_TYPE = ["Conv2D", "MaxPooling2D", "Dense"]
-MODEL_PATH = "../trained_models/"
+MODEL_PATH = "../trained_models_1080/"
 REGEX_MODEL_PATH = MODEL_PATH.replace(".", r"\.")
 RESULTS_DESTINATION = "/home/derekin/projects/thesis/document/text/"
+COLORS = ['blue', 'red', 'green', 'yellow', 'brown']
 
 def create_logger():
     """Function that creates logger for this module. """
@@ -21,7 +24,7 @@ def create_logger():
     formatter = logging.Formatter('%(asctime)s - %(lineno)d - %(name)s - %(levelname)s - %(message)s')
 
     # file handler
-    handler_dbg = logging.FileHandler('../logs/extractor.log')
+    handler_dbg = logging.FileHandler('../logs_1080/extractor.log')
     handler_dbg.setLevel(logging.DEBUG)
     handler_dbg.setFormatter(formatter)
 
@@ -38,50 +41,84 @@ def create_logger():
 LOGGER_APP = create_logger()
 
 
+def check_for_performances():
+    """TODO: retrun value of each model_name should contain only unique part of the name.
+    i.e time-stamp and iteration.
+    """
+    list_of_files = sorted(glob.glob(MODEL_PATH + '*__performance.log'))
+    new_models = []
+    for file_name in list_of_files:
+        model_name = parse_model_performance_name(file_name)
+        new_models.append(model_name)
+
+    return zip(new_models, list_of_files)
+
+
 def check_for_new_models():
     """TODO: retrun value of each model_name should contain only unique part of the name.
     i.e time-stamp and iteration.
     """
-    list_of_files = sorted(glob.glob(MODEL_PATH + 'model_*_parameters.json'))
+    list_of_files = sorted(glob.glob(MODEL_PATH + '*__parameters.json'))
     new_models = []
     for file_name in list_of_files:
-        model_name = parse_model_name(file_name)
-        new_models.append(model_name)
+        model_title = parse_model_title(file_name)
+        new_models.append(model_title)
     return new_models
 
 
-def parse_model_name(file_name):
+def parse_model_title(file_name):
     """Parser is extracting part of the name betwen words 'model_' and '_parameters.json'."""
-    file_parser = re.compile(REGEX_MODEL_PATH + r"model_(.*)_parameters\.json")
+    regex = REGEX_MODEL_PATH + r"(.*)__parameters\.json"
+    file_parser = re.compile(regex)
     result = file_parser.match(file_name).group(1)
     LOGGER_APP.debug(result)
     if not result:
         LOGGER_APP.error("Name of model wasn't parsed.")
         Exception("Name of model wasn't parsed.")
-    # TODO
     return result
 
 
+def parse_model_performance_name(file_name):
+    """Parser is extracting part of the name betwen words 'model_' and '_parameters.json'."""
+    regex = REGEX_MODEL_PATH + r"(.*)__performance\.log"
+    file_parser = re.compile(regex)
+    result = file_parser.match(file_name).group(1)
+    LOGGER_APP.debug(result)
+    if not result:
+        LOGGER_APP.error("Name of model wasn't parsed.")
+        Exception("Name of model wasn't parsed.")
+    return result
 def get_model_json(source):
     """TODO: This function will read vales from text file to set model paramters."""
-    with open(MODEL_PATH + "model_%s_parameters.json" % source, 'r') as json_file:
+    with open(MODEL_PATH + "%s__parameters.json" % source, 'r') as json_file:
         model_json = json_file.read()
         return json.loads(model_json)
 
 
 def get_model_configuration(source):
     """TODO: This function will read vales from JSON to configure model. """
-    with open(MODEL_PATH + "model_%s_configuration.json" % source, 'r') as json_file:
+    with open(MODEL_PATH + "%s__configuration.json" % source, 'r') as json_file:
         return json.loads(json_file.read())
+
+
+def parse_name_from_title(model_title):
+    """Function tries to parse model name from its convoluted title. """
+    try:
+        title_parser = re.compile("(.*)__(.*)__(.*)__(.*)")
+        return title_parser.match(model_title).group(2)
+
+    except Exception as general_exception:
+        return model_title
+
 
 def main_loop():
     """Main program loop."""
     list_of_tables = []
+    list_of_charts = []
     found_models = check_for_new_models()
-    for model_name in found_models:
+    for model_title in found_models:
+        model_name = parse_name_from_title(model_title)
         model_json = get_model_json(model_name)
-        # configuration = get_model_configuration(model_name)
-        # table = analyze_jsons(model_json, configuration, model_name)
         table = analyze_jsons(model_json, model_name)
         list_of_tables.append(table)
 
@@ -89,6 +126,17 @@ def main_loop():
         for table in list_of_tables:
             results_file.write(table)
             results_file.write("\n")
+
+    found_models = check_for_performances()
+    for model_name, path in found_models:
+        chart = create_chart_from_performance(model_name, path)
+        list_of_charts.append(chart)
+
+    with open(RESULTS_DESTINATION + "charts.org", 'w') as results_file:
+        for chart in list_of_charts:
+            results_file.write(chart)
+            results_file.write("\n")
+
 
 
 # def analyze_jsons(json_data, parameters, model_name):
@@ -121,6 +169,7 @@ def analyze_layer(layer):
         pass
 
     return result
+
 
 
 def get_header(name):
@@ -173,11 +222,60 @@ def create_table(layers, model_name):
             previous_regularized = True
         elif layer[0] == 'Activation':
             row += '| %s ' % (layer[1])
+
     # table += get_params(parameters)
+    table += row + "| - |\n"
     table += get_footer()
 
 
     return table
+
+
+def create_chart_from_performance(name, path):
+    path = os.path.join(os.getcwd(), path)
+
+    chart_text = create_header(name.replace("_", " "))
+    chart_text += "\n" + add_plot(path, "Train error", 0, 'epoch', 'acc')
+    chart_text += "\n" + add_plot(path, "Test error", 1, 'epoch', 'val_acc')
+    chart_text += "\n" + create_footer()
+    return chart_text
+
+def create_footer():
+    """Create footer data """
+    return r"""
+        \end{axis}
+    \end{tikzpicture}
+    """
+def create_header(title):
+    """Create header data """
+    return r"""
+    \begin{tikzpicture}
+        \begin{axis}[
+            title={%s},
+            xlabel={epoch},
+            ylabel={accuracy [p]},
+            legend pos=south east,
+            ymajorgrids=true,
+            xmajorgrids=true,
+            grid style=dashed,
+            scale=1.5,
+        ]
+    """ % title
+
+
+def add_plot(path, legend, index, x_col, y_col):
+    """Create plot data """
+    return r"""
+    \addplot[color=%s]
+        table [x=%s, y=%s, col sep=comma]
+        {%s};
+        \addlegendentry{%s}
+    """ % (COLORS[index],
+           x_col,
+           y_col,
+           path,
+           legend)
+
 
 if __name__ == '__main__':
     main_loop()

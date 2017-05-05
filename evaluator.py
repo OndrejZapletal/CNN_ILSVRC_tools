@@ -7,7 +7,7 @@ import sys
 import time
 from datetime import datetime
 
-from keras.callbacks import CSVLogger
+from keras.callbacks import CSVLogger, ModelCheckpoint
 from keras.datasets import cifar10
 from keras.optimizers import SGD, Adam, Nadam
 from keras.utils import np_utils
@@ -49,7 +49,7 @@ def evaluate(model_data):
             if config['settings']['source']:
                 trained_model = fit_generator_model(model, config, optimizer)
             else:
-                # trained_model = fit_model(model_data)
+                # trained_model = fit_model(model, config, optimizer)
                 pass
             save_trained_model(trained_model, config, optimizer, execution_start)
             remove_temp()
@@ -67,20 +67,17 @@ def save_trained_model(model, config, optimizer, start):
     directory = "../trained_models_%s" % config['gpu_unit']
 
     try:
-        with open("%s/model_%s_parameters.json" % (directory, config['name']),
+        with open("%s/%s__parameters.json" % (directory, config['name']),
                   'w') as model_paramters:
             model_paramters.write(model.to_json())
 
-        with open("%s/model_%s_statistics.log" % (directory, config['name']),
+        with open("%s/%s__statistics.log" % (directory, config['name']),
                   'w') as model_statistics:
 
             model_statistics.write("start: %s\n"
                                    "end: %s\n"
                                    "difference: %s" % (
                                        start, time.time(), time.time() - start))
-
-        model.save_weights("%s/model_%s_%s_weights.h5" % (
-            directory, config['name'], optimizer['name']))
 
         LOGGER_EVALUATION.debug("trained model %s with optimizer %s saved",
                                 config['name'],
@@ -109,10 +106,18 @@ def get_optimizer_data(optimizer):
 
 def fit_generator_model(model, config, optimizer):
     """Trains Neural Network with available data."""
-
+    directory = "../trained_models_%s" % config['gpu_unit']
     csv_logger = CSVLogger(
-        '../trained_models_%s/model_%s_%s_performance.log' % (
-            config['gpu_unit'], config['name'], optimizer['name']))
+        '%s/%s__%s__performance.log' % (
+            directory, config['name'], optimizer['name']))
+    checkpointer = ModelCheckpoint(
+        '%s/%s__%s__weights_epoch_{epoch:02d}_val_acc_{val_acc:.2f}.hdf5' % (
+            directory, config['name'], optimizer['name']),
+        monitor='val_acc',
+        verbose=1,
+        save_best_only=True,
+        mode='max',
+        save_weights_only=True)
 
     if config['settings']['weights']:
         if os.path.isfile(config['settings']['weights']):
@@ -128,15 +133,18 @@ def fit_generator_model(model, config, optimizer):
         metrics=config['optimization']['metrics'],)
 
     model.fit_generator(
-        generator=generate_train_data(config['settings']['source'],
-                                      config['training']['train_batch_size']),
+        generator=generate_train_data(
+            config['settings']['source'], config['training']['train_batch_size']),
         steps_per_epoch=config['training']['steps_per_epoch'],
         epochs=config['training']['epochs'],
         verbose=config['settings']['verbose'],
-        callbacks=[csv_logger],
+        callbacks=[csv_logger, checkpointer],
         validation_data=generate_test_data(config['settings']['source'],
                                            config['testing']['test_batch_size']),
-        validation_steps=config['testing']['validation_steps'])
+        validation_steps=config['testing']['validation_steps'],
+        max_q_size=10,
+        workers=4,
+        pickle_safe=True)
     return model
 
 
@@ -154,51 +162,34 @@ def fit_generator_model(model, config, optimizer):
 #     return (x_train, y_train), (x_test, y_test)
 
 
-# def fit_model(model_data, optimizer):
+# def fit_model(model, config, optimizer):
 #     """Trains Neural Network with available data."""
-#     model = model_data[0]
-#     config = model_data[1]
+#     directory = "../trained_models_%s" % config['gpu_unit']
 #     csv_logger = CSVLogger(
-#         '../trained_models/model_%s_%s_performance.log' % (config['name'], optimizer))
-#     train_data, test_data = load_cifar_dataset()
+#         '%s/model_%s_%s_performance.log' % (
+#             directory, config['name'], optimizer['name']))
+
 #     model.compile(
-#         loss=config['loss'],
-#         optimizer=optimizer,
-#         metrics=[config['metrics']])
-#     model.fit(
-#         train_data[0],
-#         train_data[1],
-#         batch_size=config['batch_size'],
-#         epochs=config['epochs'],
-#         verbose=config['verbose'],
-#         validation_data=test_data,
-#         callbacks=[csv_logger])
-#     # evaluate_net(model_data, test_data, i)
+#         loss=config['optimization']['loss'],
+#         optimizer=get_optimizer_data(optimizer),
+#         metrics=config['optimization']['metrics'],)
+
+#     with h5py.File(config['settings']['source'], 'r') as hf5:
+#         train = hf5["/data/train"]
+#         data_x = train["x"][:100,:,:,:]
+#         data_y = train["y"][:100,:]
+
+#         test = hf5["/data/train"]
+#         test_data_x = test["x"][:100,:,:,:]
+#         test_data_y = test["y"][:100,:]
+
+
+#         model.fit(
+#             data_x,
+#             data_y,
+#             batch_size=config['training']['train_batch_size'],
+#             epochs=config['training']['epochs'],
+#             verbose=config['settings']['verbose'],
+#             validation_data=(test_data_x, test_data_y),
+#             callbacks=[csv_logger])
 #     return model
-
-
-# def evaluate_net(model_data, test_data, epoch):
-#     """Evaluates performance of the network on the test data."""
-#     model = model_data[0]
-#     config = model_data[1]
-#     score = model.evaluate(test_data[0], test_data[1], verbose=0)
-
-#     predicted_classes = model.predict(test_data[0])
-#     predicted_classes_indexes = [np.argmax(item) for item in predicted_classes]
-#     test_data_indexes = [np.argmax(item) for item in test_data[1]]
-
-#     LOGGER_TEST_PERFORMANCE.info(
-#         'model: %s, epoch: %s, accuracy: %s ', config['name'], epoch, score[1])
-#     correct_indexes = [
-#         i for i, _ in enumerate(test_data_indexes)
-#         if test_data_indexes[i] == predicted_classes_indexes[i]
-#     ]
-#     incorrect_indexes = [
-#         i for i, _ in enumerate(test_data_indexes)
-#         if test_data_indexes[i] != predicted_classes_indexes[i]
-#     ]
-
-#     LOGGER_EVALUATION.debug("Correctly guessed in epoch %s: %s", epoch, len(correct_indexes))
-#     LOGGER_EVALUATION.debug("Incorrectly guessed in epoch %s: %s", epoch, len(incorrect_indexes))
-
-#     return score
