@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """This is test of keras library."""
 
-import csv
 import glob
 import json
 import logging
@@ -88,6 +87,8 @@ def parse_model_performance_name(file_name):
         LOGGER_APP.error("Name of model wasn't parsed.")
         Exception("Name of model wasn't parsed.")
     return result
+
+
 def get_model_json(source):
     """TODO: This function will read vales from text file to set model paramters."""
     with open(MODEL_PATH + "%s__parameters.json" % source, 'r') as json_file:
@@ -104,7 +105,7 @@ def get_model_configuration(source):
 def parse_name_from_title(model_title):
     """Function tries to parse model name from its convoluted title. """
     try:
-        title_parser = re.compile("(.*)__(.*)__(.*)__(.*)")
+        title_parser = re.compile("(.*?)__(.*?)__(.*?)__(.*?)")
         return title_parser.match(model_title).group(2)
 
     except Exception as general_exception:
@@ -116,21 +117,23 @@ def main_loop():
     list_of_tables = []
     list_of_charts = []
     found_models = check_for_new_models()
+    found_performances = check_for_performances()
+
     for model_title in found_models:
         model_name = parse_name_from_title(model_title)
-        model_json = get_model_json(model_name)
+        model_json = get_model_json(model_title)
         table = analyze_jsons(model_json, model_name)
         list_of_tables.append(table)
+
+    for model_title, path in found_performances:
+        model_name = parse_name_from_title(model_title)
+        chart = create_chart_from_performance(model_name, path)
+        list_of_charts.append(chart)
 
     with open(RESULTS_DESTINATION + "results.org", 'w') as results_file:
         for table in list_of_tables:
             results_file.write(table)
             results_file.write("\n")
-
-    found_models = check_for_performances()
-    for model_name, path in found_models:
-        chart = create_chart_from_performance(model_name, path)
-        list_of_charts.append(chart)
 
     with open(RESULTS_DESTINATION + "charts.org", 'w') as results_file:
         for chart in list_of_charts:
@@ -138,10 +141,9 @@ def main_loop():
             results_file.write("\n")
 
 
-
 # def analyze_jsons(json_data, parameters, model_name):
 def analyze_jsons(json_data, model_name):
-    print("Analyzing model %s" % model_name)
+    LOGGER_APP.info("Analyzing model %s", model_name)
     layers = []
     for layer in json_data['config']:
         layers.append(analyze_layer(layer))
@@ -171,7 +173,6 @@ def analyze_layer(layer):
     return result
 
 
-
 def get_header(name):
     tab_name = name
     caption_name = name.replace("_", "\\textunderscore ")
@@ -181,11 +182,14 @@ def get_header(name):
         "|-|\n |layer|name|kernels|size of kernel|" \
         "activation function|regularization|\n|-|\n" % (tab_name, caption_name)
 
+
 def get_middle():
     return "|-|\n|layer|name|neurons|-|activation function|regularization|\n|-"
 
+
 def get_footer():
     return "|-|\n"
+
 
 # def get_params(params):
 #     return "|-|\n|batch size|epochs|-|-|-|\n|-|"
@@ -226,19 +230,18 @@ def create_table(layers, model_name):
     # table += get_params(parameters)
     table += row + "| - |\n"
     table += get_footer()
-
-
     return table
 
 
 def create_chart_from_performance(name, path):
+    LOGGER_APP.info("Creating chart for model %s", name)
     path = os.path.join(os.getcwd(), path)
-
     chart_text = create_header(name.replace("_", " "))
     chart_text += "\n" + add_plot(path, "Train error", 0, 'epoch', 'acc')
     chart_text += "\n" + add_plot(path, "Test error", 1, 'epoch', 'val_acc')
     chart_text += "\n" + create_footer()
     return chart_text
+
 
 def create_footer():
     """Create footer data """
@@ -246,6 +249,8 @@ def create_footer():
         \end{axis}
     \end{tikzpicture}
     """
+
+
 def create_header(title):
     """Create header data """
     return r"""
@@ -254,6 +259,7 @@ def create_header(title):
             title={%s},
             xlabel={epoch},
             ylabel={accuracy [p]},
+            ymin=0.0, ymax=1,
             legend pos=south east,
             ymajorgrids=true,
             xmajorgrids=true,
