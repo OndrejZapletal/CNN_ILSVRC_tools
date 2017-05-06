@@ -175,7 +175,7 @@ def analyze_layer(layer):
 
 def get_header(name):
     tab_name = name
-    caption_name = name.replace("_", "\\textunderscore ")
+    caption_name = name.replace("_", " ")
     return "#+NAME: tab:%s\n" \
         "#+CAPTION: Structure of model %s\n" \
         "#+ATTR_LATEX: :align |l|l|c|c|c|c|\n" \
@@ -219,13 +219,17 @@ def create_table(layers, model_name):
             index += 1
 
         elif layer[0] == 'Flatten':
-            table += row + "|\n" + get_middle()
+            if not previous_regularized:
+                table += "%s| - |\n%s" % (row, get_middle())
+            else:
+                table += "%s|\n%s" % (row, get_middle())
+                previous_regularized = False
             row = ""
         elif layer[0] == 'Dropout':
             row += '| Dropout(%s)' % (layer[1])
             previous_regularized = True
         elif layer[0] == 'Activation':
-            row += '| %s ' % (layer[1])
+            row += '| %s' % (layer[1])
 
     # table += get_params(parameters)
     table += row + "| - |\n"
