@@ -370,15 +370,6 @@ def generate_train_data(hf5_file_name, batch_size=None):
         pos = 0
         size = data_x.shape[0]
 
-        datagen = ImageDataGenerator(
-            rotation_range=40,
-            width_shift_range=0.2,
-            height_shift_range=0.2,
-            shear_range=0.2,
-            zoom_range=0.2,
-            horizontal_flip=True,
-            fill_mode='nearest')
-
         if batch_size:
             step = batch_size
         else:
@@ -394,12 +385,10 @@ def generate_train_data(hf5_file_name, batch_size=None):
                 batch_x = np.concatenate((data_x[0:pos, :, :, :], data_x[temp:size, :, :, :]))
                 batch_y = np.concatenate((data_y[0:pos, :], data_y[temp:size, :]))
 
-            undersized_batch_x =  np.empty((step, TRAIN_SIZE, TRAIN_SIZE, 3))
+            undersized_batch_x = np.empty((step, TRAIN_SIZE, TRAIN_SIZE, 3))
 
-            for batch in datagen.flow(batch_x, batch_size=step):
-                for index, image in enumerate(batch):
-                    undersized_batch_x[index, :, :, :] = get_center_patch(image)
-                break
+            for index, image in enumerate(batch_x):
+                undersized_batch_x[index, :, :, :] = generate_random_patch(image)
 
             yield (undersized_batch_x, batch_y)
 
@@ -434,8 +423,7 @@ def generate_test_data(hf5_file_name, batch_size=None):
                 batch_x = np.concatenate((data_x[0:pos, :, :, :], data_x[temp:size, :, :, :]))
                 batch_y = np.concatenate((data_y[0:pos, :], data_y[temp:size, :]))
 
-
-            undersized_batch_x =  np.empty((step, TRAIN_SIZE, TRAIN_SIZE, 3))
+            undersized_batch_x = np.empty((step, TRAIN_SIZE, TRAIN_SIZE, 3))
 
             for index, image in enumerate(batch_x):
                 undersized_batch_x[index, :, :, :] = get_center_patch(image)
@@ -477,8 +465,18 @@ def generate_random_indexes(indexes):
             count += 1
 
 
+def generate_random_patch(image):
+    """ Function returns random patch from original image. """
+    x_rand = randint(0, DIFF)
+    y_rand = randint(0, DIFF)
+    patch = image[x_rand:TRAIN_SIZE+x_rand, y_rand:TRAIN_SIZE+y_rand, :]
+    if randint(0, 1):
+        patch = np.flip(patch, 1)
+    return patch
+
+
 def generate_patches(image, count):
-    """ Function returns random patches from original image. """
+    """ Function returns random list of patches from original image. """
     patches = []
     for _ in range(count):
         x_rand = randint(0, DIFF)
@@ -491,6 +489,7 @@ def generate_patches(image, count):
 
 
 def get_center_patch(image):
+    """Returns center patch from the image. """
     diff = int((SIZE-TRAIN_SIZE)/2)
     return image[diff:-diff, diff:-diff, :]
 
