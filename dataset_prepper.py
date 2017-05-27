@@ -7,9 +7,8 @@ from random import randint, sample
 
 import h5py
 import numpy as np
-from keras.preprocessing.image import ImageDataGenerator
 from keras.utils import np_utils
-from scipy.misc import imresize
+from scipy.misc import imresize, imsave
 from scipy.ndimage import imread
 
 from loggers import LOGGER_DATASET
@@ -492,6 +491,22 @@ def get_center_patch(image):
     """Returns center patch from the image. """
     diff = int((SIZE-TRAIN_SIZE)/2)
     return image[diff:-diff, diff:-diff, :]
+
+def generate_random_from_dataset(hf5_file_name, data_type, count):
+    with h5py.File(hf5_file_name, 'r') as hf5:
+        grp = hf5["/data/%s" % data_type]
+        data_x = grp["x"]
+        data_y = grp["y"]
+        indexes = sample(range(data_x.shape[0]), count)
+
+        for i, index in enumerate(indexes, start=1):
+            imsave("image_%s_category_%s.jpg" % (i, get_from_cat(data_y[index])), data_x[index])
+
+def get_from_cat(cat):
+    for i, c in enumerate(cat):
+        if c:
+            return i
+
 
 
 def main():
