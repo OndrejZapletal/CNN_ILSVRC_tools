@@ -1,12 +1,11 @@
 # Howto
 
-
 Install the requirements
 ```bash
 pip install -r requirements.txt
 ```
 
-Required directory structure
+Create following file structure:
 ```bash
 ├── datasets
 ├── images
@@ -23,17 +22,17 @@ Required directory structure
 └── trained_models
 ```
 
-Create dataset
+Use this script to create dataset from images in `images/` folder
 ```bash
 python dataset_prepper.py
 ```
 
-Create model
+Use this script that creates model in `models/` folder
 ```bash
 python model_creator.py
 ```
 
-Start training models
+Use this script to start training models on dataset in `datasets/`
 ```bash
 python application.py
 ```
