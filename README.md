@@ -9,6 +9,7 @@ pip install -r requirements.txt
 Required directory structure
 ```bash
 ├── datasets
+├── images
 ├── logs
 ├── models
 ├── tools

@@ -3,6 +3,7 @@
 import glob
 import os
 import os.path
+import sys
 from random import randint, sample
 
 import h5py
@@ -15,7 +16,7 @@ from scipy.ndimage import imread
 from loggers import LOGGER_DATASET
 
 # Source and destination
-SOURCE = ""
+SOURCE = "../images/"
 DESTINATION = ""
 
 HDF5_CAT = "../datasets/image_net_categorized.h5"
@@ -94,47 +95,51 @@ def load_dataset_from_images(source, hdf5_file_name):
 		data_grp = hf5_w.create_group("data")
 		data_grp.attrs["nb_classes"] = 0
 		num_of_images = 0
-		directories = sample(sorted(glob.glob(os.path.join(source, "*/"))), NUM_OF_SELECTED_CLASSES)
+		try:
+			directories = sample(sorted(glob.glob(os.path.join(source, "*/"))), NUM_OF_SELECTED_CLASSES)
+		except ValueError:
+			LOGGER_DATASET.info("There are no images in directory %s. " % os.path.abspath(source))
+			sys.exit(0)
+		else:
+			for index, dir_path in enumerate(directories, start=1):
 
-		for index, dir_path in enumerate(directories, start=1):
+				dir_name = os.path.split(os.path.dirname(dir_path))[1]
 
-			dir_name = os.path.split(os.path.dirname(dir_path))[1]
+				LOGGER_DATASET.info("Processing directory %s (%s of %s)",
+									dir_name, index, len(directories))
+				dataset = data_grp.create_dataset(
+					dir_name, (AVR_IMAGES_PER_CLASS, SIZE, SIZE, 3), maxshape=(None, SIZE, SIZE, 3))
 
-			LOGGER_DATASET.info("Processing directory %s (%s of %s)",
-								dir_name, index, len(directories))
-			dataset = data_grp.create_dataset(
-				dir_name, (AVR_IMAGES_PER_CLASS, SIZE, SIZE, 3), maxshape=(None, SIZE, SIZE, 3))
+				index = 0
+				image_batch = []
+				files = sorted(glob.glob(dir_path + "/*.JPEG"))
+				for index_f, file_path in enumerate(files, start=1):
 
-			index = 0
-			image_batch = []
-			files = sorted(glob.glob(dir_path + "/*.JPEG"))
-			for index_f, file_path in enumerate(files, start=1):
+					# check whether the size of dataset is big enough for another image
+					if dataset.shape[0] <= index:
+						dataset.resize((dataset.shape[0] + RESHAPE_STEP, SIZE, SIZE, 3))
 
-				# check whether the size of dataset is big enough for another image
-				if dataset.shape[0] <= index:
-					dataset.resize((dataset.shape[0] + RESHAPE_STEP, SIZE, SIZE, 3))
+					image_batch.append(get_image(file_path))
+					index += 1
+					num_of_images += 1
 
-				image_batch.append(get_image(file_path))
-				index += 1
-				num_of_images += 1
+					if len(image_batch) == BATCH_SIZE:
+						dataset[index - BATCH_SIZE:index] = np.stack(image_batch, axis=0)
+						image_batch = []
 
-				if len(image_batch) == BATCH_SIZE:
-					dataset[index - BATCH_SIZE:index] = np.stack(image_batch, axis=0)
-					image_batch = []
+					LOGGER_DATASET.debug("File %s saved into %s (%s of %s)",
+										file_path, dataset.name, index_f, len(files))
 
-				LOGGER_DATASET.debug("File %s saved into %s (%s of %s)",
-									 file_path, dataset.name, index_f, len(files))
+				if image_batch:
+					dataset[index - len(image_batch):index] = np.stack(image_batch, axis=0)
 
-			if image_batch:
-				dataset[index - len(image_batch):index] = np.stack(image_batch, axis=0)
+				# at the end of folder resize shape to exactly fit the number of images within dataset
+				if dataset.shape[0] > index:
+					dataset.resize((index, SIZE, SIZE, 3))
 
-			# at the end of folder resize shape to exactly fit the number of images within dataset
-			if dataset.shape[0] > index:
-				dataset.resize((index, SIZE, SIZE, 3))
-
-			# at the end of folder increase number of classes
-			data_grp.attrs["nb_classes"] += 1
-			data_grp.attrs['num_of_images'] = num_of_images
+				# at the end of folder increase number of classes
+				data_grp.attrs["nb_classes"] += 1
+				data_grp.attrs['num_of_images'] = num_of_images
 
 
 def split_data(hf5_file_name_src, hf5_file_name_dst):
