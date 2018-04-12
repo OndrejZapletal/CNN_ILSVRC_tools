@@ -4,6 +4,7 @@ import glob
 import os
 import os.path
 import sys
+import logging
 from random import randint, sample
 
 import h5py
@@ -35,7 +36,7 @@ TRAIN_BATCH_SIZE = 10
 TEST_BATCH_SIZE = 10
 BATCH_SIZE = 500
 DELIMITER = "*" * 30
-NUM_OF_SELECTED_CLASSES = 100
+NUM_OF_SELECTED_CLASSES = 10
 
 
 def prepare_dataset_from_hf5(hf5_file_source, hf5_file_destination):
@@ -270,7 +271,8 @@ def get_image(file_path):
 			pass
 		elif raw_image.shape[0] > SIZE or raw_image.shape[1] > SIZE:
 			LOGGER_DATASET.debug("resizing image %s: %s", file_name, raw_image.shape)
-			resized_image = resize(raw_image, get_percentage(raw_image))
+			percentage = get_percentage(raw_image)
+			resized_image = resize(raw_image, [int(size * percentage) for size in raw_image.shape[:-1]])
 			LOGGER_DATASET.debug("fixing image %s: %s", file_name, resized_image.shape)
 			raw_image = fix_image(resized_image)
 			LOGGER_DATASET.debug("resultin image %s: %s", file_name, raw_image.shape)
@@ -293,8 +295,8 @@ def get_percentage(image):
 	"""
 	row = image.shape[0]
 	col = image.shape[1]
-	p_row = (100 * (SIZE - 1)) / row
-	p_col = (100 * (SIZE - 1)) / col
+	p_row = (SIZE - 1) / row
+	p_col = (SIZE - 1) / col
 	return p_row if p_row > p_col else p_col
 
 
@@ -517,6 +519,7 @@ def get_from_cat(cat):
 
 def main():
 	"""Main function"""
+	logging.basicConfig(level=logging.DEBUG)
 	load_dataset_from_images(SOURCE, HDF5_CAT)
 	split_data(HDF5_CAT, HDF5_SPL)
 	prepare_dataset_from_hf5(HDF5_SPL, HDF5_PRP)
