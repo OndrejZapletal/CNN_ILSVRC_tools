@@ -22,7 +22,7 @@ DESTINATION = ""
 
 HDF5_CAT = "../datasets/image_net_categorized.h5"
 HDF5_SPL = "../datasets/image_net_split.h5"
-HDF5_PRP = "../datasets/image_net_40_cat.h5"
+HDF5_PRP = "../datasets/image_net_{}_cat.h5"
 
 TRAIN_SIZE = 224
 DIFF = 256 - TRAIN_SIZE
@@ -519,12 +519,10 @@ def get_from_cat(cat):
 
 def main():
 	"""Main function"""
-	logging.basicConfig(level=logging.DEBUG)
+	# logging.basicConfig(level=logging.DEBUG)
 	load_dataset_from_images(SOURCE, HDF5_CAT)
 	split_data(HDF5_CAT, HDF5_SPL)
-	prepare_dataset_from_hf5(HDF5_SPL, HDF5_PRP)
-
-	generate_random_from_dataset(DESTINATION + "image_net_50000_100_cat.h5" , "train", 30)
+	prepare_dataset_from_hf5(HDF5_SPL, HDF5_PRP.format(NUM_OF_SELECTED_CLASSES))
 
 
 if __name__ == "__main__":
