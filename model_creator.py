@@ -9,7 +9,7 @@ from keras.models import Sequential
 from keras.optimizers import SGD, Adam, Nadam
 
 
-def configuration_imagenet():
+def configuration_imagenet(number_of_classes):
 	"""Create JSON file with model configuration. """
 	return {
 		'optimization': {
@@ -20,16 +20,16 @@ def configuration_imagenet():
 		'training': {
 			'epochs': 100,
 			'steps_per_epoch': 10,
-			'train_batch_size': 20
+			'train_batch_size': 10
 		},
 		'testing': {
 			'validation_steps': 182,
 			'test_batch_size': 10
 		},
 		'settings': {
-			'source': '../datasets/image_net_10_cat.h5',
+			'source': '../datasets/image_net_{}_cat.h5'.format(number_of_classes),
 			'shape': (224, 224, 3),
-			'nb_classes': 10,
+			'nb_classes': number_of_classes,
 			'weights': '',
 			'verbose': 1
 		},
@@ -118,7 +118,7 @@ def main():
 	"""main function"""
 	save_model_to_file(
 		create_model_imagenet,
-		configuration_imagenet()
+		configuration_imagenet(10)
 	)
 
 if __name__ == "__main__":
